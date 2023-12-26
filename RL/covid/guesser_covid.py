@@ -6,7 +6,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import utils
+import RL.utils as utils
 
 
 class NeuralNetwork(nn.Module):
@@ -171,7 +171,7 @@ def main():
                 data_loader_train, data_loader_val)
 
     test(model, X_test, y_test)
-    save_model(model, 'C:\\Users\\kashann\\PycharmProjects\\adaptivFS\\covid\\model_guesser_covid')
+    save_model(model, 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\covid\\model_guesser_covid')
 
 
 if __name__ == "__main__":

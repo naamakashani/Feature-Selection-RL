@@ -115,7 +115,7 @@ def load_chron():
 def load_covid():
     data = []
     labels = []
-    file_path = 'C:\\Users\\kashann\\PycharmProjects\\adaptivFS\\covid\\covid.csv'
+    file_path = 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\covid\\covid.csv'
     df = pd.read_csv(file_path)
     df_clean = df.drop(columns=df.columns[(df == 97).any() | (df == 99).any()])
     df_clean['DATE_DIED'] = df_clean['DATE_DIED'].apply(lambda x: 1 if x == '9999-99-99' else 0)
@@ -124,7 +124,7 @@ def load_covid():
     df_clean_all = pd.concat([df_clean_0, df_clean_1])
     # change the DATE_DIED column to be the last column in the dataframe
     # save df clean to csv
-    file_path_clean = 'C:\\Users\\kashann\\PycharmProjects\\adaptivFS\\covid\\covid_clean.csv'
+    file_path_clean = 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\covid\\covid_clean.csv'
     df_clean_all.to_csv(file_path_clean, index=False)
 
     # Open the CSV file
@@ -155,7 +155,7 @@ def load_covid():
 def load_diabetes():
     data = []
     labels = []
-    file_path = 'C:\\Users\\kashann\\PycharmProjects\\adaptivFS\\diabetes\\diabetes_prediction_dataset.csv'
+    file_path = 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\diabetes\\diabetes_prediction_dataset.csv'
     # Open the CSV file
     with open(file_path, newline='') as csvfile:
         # Create a CSV reader

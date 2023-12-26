@@ -1,14 +1,12 @@
 import numpy as np
 import os
 from sklearn.model_selection import train_test_split
-from sklearn.feature_selection import mutual_info_classif
-from sklearn.tree import DecisionTreeClassifier
 import gym
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
-import utils
+import RL.utils as utils
 
 
 class Guesser(nn.Module):
@@ -113,7 +111,7 @@ class diabetes_env(gym.Env):
 
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
-            save_dir = 'C:\\Users\\kashann\\PycharmProjects\\adaptivFS\\diabetes\\model_guesser_diabetes'
+            save_dir = 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\diabetes\\model_guesser_diabetes'
             guesser_filename = 'best_guesser.pth'
             guesser_load_path = os.path.join(save_dir, guesser_filename)
             if os.path.exists(guesser_load_path):

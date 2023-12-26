@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
 import torch.nn.functional as F
-import utils
+import RL.utils as utils
 
 
 class Guesser(nn.Module):

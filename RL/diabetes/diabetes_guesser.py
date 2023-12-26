@@ -1,16 +1,12 @@
 import numpy as np
 from fastai.data.load import DataLoader
 from sklearn.model_selection import train_test_split
-from torch.utils import data
 from torch.utils.data import TensorDataset
-from torchvision import datasets, transforms
 import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import random
-
-import utils
+import RL.utils as utils
 
 
 class NeuralNetwork(nn.Module):
@@ -203,7 +199,7 @@ def main():
                 data_loader_train, data_loader_val)
 
     test(model, X_test, y_test)
-    save_model(model, 'C:\\Users\\kashann\\PycharmProjects\\adaptiveFS\\model_guesser_diabetes')
+    save_model(model, 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\diabetes\\model_guesser_diabetes')
 
 
 if __name__ == "__main__":

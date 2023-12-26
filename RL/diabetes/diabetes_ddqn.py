@@ -14,16 +14,16 @@ from sklearn.metrics import confusion_matrix
 
 from diabetes_env import *
 
-import utils
+import RL.utils as utils
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--save_dir",
                     type=str,
-                    default='C:\\Users\\kashann\\PycharmProjects\\adaptivFS\\diabetes\\diabetes_ddqn_models',
+                    default='C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\diabetes\\diabetes_ddqn_models',
                     help="Directory for saved models")
 parser.add_argument("--masked_images_dir",
                     type=str,
-                    default='C:\\Users\\kashann\\PycharmProjects\\adaptivFS\\diabetes\\diabetes_masked_images',
+                    default='C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\diabetes\\diabetes_masked_images',
                     help="Directory for saved masked images")
 parser.add_argument("--gamma",
                     type=float,
