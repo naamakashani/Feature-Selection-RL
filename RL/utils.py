@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 import csv
 import pandas as pd
+import torch
 
 
 def load_data(case):
@@ -115,7 +116,7 @@ def load_chron():
 def load_covid():
     data = []
     labels = []
-    file_path = 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\covid\\covid.csv'
+    file_path = './covid//covid.csv'
     df = pd.read_csv(file_path)
     df_clean = df.drop(columns=df.columns[(df == 97).any() | (df == 99).any()])
     df_clean['DATE_DIED'] = df_clean['DATE_DIED'].apply(lambda x: 1 if x == '9999-99-99' else 0)
@@ -124,7 +125,7 @@ def load_covid():
     df_clean_all = pd.concat([df_clean_0, df_clean_1])
     # change the DATE_DIED column to be the last column in the dataframe
     # save df clean to csv
-    file_path_clean = 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\covid\\covid_clean.csv'
+    file_path_clean = './covid//covid_clean.csv'
     df_clean_all.to_csv(file_path_clean, index=False)
 
     # Open the CSV file
@@ -149,7 +150,7 @@ def load_covid():
     y = np.array(labels)
     n, d = X.shape
     print('loaded data,  {} rows, {} columns'.format(n, d))
-    return X, y, question_names
+    return X, y, question_names, len(columns_without_label)
 
 
 def load_diabetes():
@@ -205,9 +206,15 @@ def load_diabetes():
 
 
 def diabetes_prob_actions():
-    #gender, age, hypertension, heart_disease, smoking_history, bmi, HbA1c_level, blood_glucose_level
+    # gender, age, hypertension, heart_disease, smoking_history, bmi, HbA1c_level, blood_glucose_level
     cost_list = [1, 1, 0.5, 1, 1, 0.8, 0.1, 0.1]
-    return np.array(cost_list)
+    return torch.from_numpy(np.array(cost_list))
+
+
+def covid_prob_actions():
+    # gender, age, hypertension, heart_disease, smoking_history, bmi, HbA1c_level, blood_glucose_level
+    cost_list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    return torch.from_numpy(np.array(cost_list))
 
 
 def load_mnist(case=1):
