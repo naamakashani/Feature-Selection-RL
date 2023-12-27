@@ -328,6 +328,7 @@ def main():
 
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
+            """
 
     test(env, agent, input_dim, output_dim)
 
