@@ -290,6 +290,8 @@ def main():
     steps = deque(maxlen=100)
 
     replay_memory = ReplayMemory(FLAGS.capacity)
+    """
+    
 
     for i in count(1):
         train_dqn = True

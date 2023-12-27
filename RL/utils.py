@@ -116,7 +116,7 @@ def load_chron():
 def load_covid():
     data = []
     labels = []
-    file_path = './covid//covid.csv'
+    file_path = './extra/covid//covid.csv'
     df = pd.read_csv(file_path)
     df_clean = df.drop(columns=df.columns[(df == 97).any() | (df == 99).any()])
     df_clean['DATE_DIED'] = df_clean['DATE_DIED'].apply(lambda x: 1 if x == '9999-99-99' else 0)
