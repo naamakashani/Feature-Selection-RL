@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 from fastai.data.load import DataLoader
 from sklearn.model_selection import train_test_split
@@ -8,6 +10,64 @@ import torch.nn as nn
 import torch.nn.functional as F
 import RL.utils as utils
 
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("--directory",
+                    type=str,
+                    default="C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL",
+                    help="Directory for saved models")
+
+parser.add_argument("--batch_size",
+                    type=int,
+                    default=64,
+                    help="Mini-batch size")
+parser.add_argument("--num_epochs",
+                    type=int,
+                    default=40,
+                    help="number of epochs")
+parser.add_argument("--hidden-dim",
+                    type=int,
+                    default=64,
+                    help="Hidden dimension")
+parser.add_argument("--capacity",
+                    type=int,
+                    default=10000,
+                    help="Replay memory capacity")
+parser.add_argument("--max-episode",
+                    type=int,
+                    default=2000,
+                    help="e-Greedy target episode (eps will be the lowest at this episode)")
+parser.add_argument("--min-eps",
+                    type=float,
+                    default=0.01,
+                    help="Min epsilon")
+parser.add_argument("--lr",
+                    type=float,
+                    default=1e-4,
+                    help="Learning rate")
+parser.add_argument("--weight_decay",
+                    type=float,
+                    default=0e-4,
+                    help="l_2 weight penalty")
+parser.add_argument("--val_interval",
+                    type=int,
+                    default=1000,
+                    help="Interval for calculating validation reward and saving model")
+parser.add_argument("--episode_length",
+                    type=int,
+                    default=7,
+                    help="Episode length")
+# Environment params
+parser.add_argument("--g_hidden-dim",
+                    type=int,
+                    default=256,
+                    help="Guesser hidden dimension")
+parser.add_argument("--g_weight_decay",
+                    type=float,
+                    default=0e-4,
+                    help="Guesser l_2 weight penalty")
+
+FLAGS = parser.parse_args(args=[])
+
 
 class Guesser(nn.Module):
     def __init__(self):
@@ -15,7 +75,7 @@ class Guesser(nn.Module):
         Declare layers for the model
         '''
         super().__init__()
-        self.X, self.y, self.names, self.features_size = utils.load_covid()
+        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
         self.fc0 = nn.Linear(self.features_size, 128)
         self.fc1 = nn.Linear(128, 64)
         self.fc2 = nn.Linear(64, 2)
@@ -37,7 +97,7 @@ class Guesser(nn.Module):
         return F.softmax(x)
 
 
-def mask(images: np.array) -> np.array:
+def mask(model, images: np.array) -> np.array:
     '''
     Mask feature of the input
     :param images: input
@@ -45,7 +105,7 @@ def mask(images: np.array) -> np.array:
     '''
     # check if images has 1 dim
     if len(images.shape) == 1:
-        for i in range(14):
+        for i in range(model.features_size):
             # choose to mask in probability of 0.3
             if (np.random.rand() < 0.3):
                 images[i] = 0
@@ -53,7 +113,7 @@ def mask(images: np.array) -> np.array:
     else:
 
         for j in range(int(len(images))):
-            for i in range(14):
+            for i in range(model.features_size):
                 # choose to mask in probability of 0.3
                 if (np.random.rand() < 0.3):
                     images[j][i] = 0
@@ -73,7 +133,7 @@ def train_model(model,
     for e in range(nepochs):
         for images, labels in train_loader:
             images = images.view(images.shape[0], -1)
-            images = mask(images)
+            images = mask(model, images)
             model.train()
             model.optimizer.zero_grad()
             output = model(images)
@@ -90,7 +150,7 @@ def train_model(model,
                 for images, labels in val_loader:
                     images = images.view(images.shape[0], -1)
                     # call mask function on images
-                    images = mask(images)
+                    images = mask(model, images)
                     # Training pass
                     model.eval()
                     output = model(images)
@@ -118,7 +178,7 @@ def test(model, X_test, y_test):
     y_hat = []
     with torch.no_grad():
         for x in X_test:
-            x = mask(x)
+            x = mask(model, x)
             # create tensor form x
             x = torch.Tensor(x).float()
             output = model(x)
@@ -173,17 +233,15 @@ def main():
     y_tensor_train = torch.from_numpy(y_train)  # Assuming y_data contains integers
     # Create a TensorDataset
     dataset_train = TensorDataset(X_tensor_train, y_tensor_train)
-    # Define batch size
-    batch_size = 32
+
     # Create a DataLoader
-    data_loader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
+    data_loader_train = DataLoader(dataset_train, batch_size=FLAGS.batch_size, shuffle=True)
     # Convert data to PyTorch tensors
     X_tensor_val = torch.Tensor(X_val)
     y_tensor_val = torch.Tensor(y_val)  # Assuming y_data contains integers
     dataset_val = TensorDataset(X_tensor_val, y_tensor_val)
-    data_loader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
-    nepochs = 20
-    train_model(model, nepochs,
+    data_loader_val = DataLoader(dataset_val, batch_size=FLAGS.batch_size, shuffle=True)
+    train_model(model, FLAGS.num_epochs,
                 data_loader_train, data_loader_val)
 
     test(model, X_test, y_test)
@@ -191,6 +249,5 @@ def main():
 
 
 if __name__ == "__main__":
-    desired_directory = "C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL"
-    os.chdir(desired_directory)
+    os.chdir(FLAGS.directory)
     main()
