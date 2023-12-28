@@ -77,7 +77,7 @@ def load_heart():
     n, d = X.shape
     class_names = [0, 1]
     print('loaded data,  {} rows, {} columns'.format(n, d))
-    return X, y, question_names
+    return X, y, question_names, len(columns_without_label)
 
 
 def load_chron():
@@ -110,13 +110,13 @@ def load_chron():
     y = np.array(labels)
     n, d = X.shape
     print('loaded data,  {} rows, {} columns'.format(n, d))
-    return X, y, question_names
+    return X, y, question_names, len(columns_without_label)
 
 
 def load_covid():
     data = []
     labels = []
-    file_path = './extra/covid//covid.csv'
+    file_path = './/extra//covid//covid.csv'
     df = pd.read_csv(file_path)
     df_clean = df.drop(columns=df.columns[(df == 97).any() | (df == 99).any()])
     df_clean['DATE_DIED'] = df_clean['DATE_DIED'].apply(lambda x: 1 if x == '9999-99-99' else 0)
@@ -125,7 +125,7 @@ def load_covid():
     df_clean_all = pd.concat([df_clean_0, df_clean_1])
     # change the DATE_DIED column to be the last column in the dataframe
     # save df clean to csv
-    file_path_clean = './covid//covid_clean.csv'
+    file_path_clean = './/extra//covid//covid_clean.csv'
     df_clean_all.to_csv(file_path_clean, index=False)
 
     # Open the CSV file
@@ -156,9 +156,17 @@ def load_covid():
 def load_diabetes():
     data = []
     labels = []
-    file_path = 'C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\diabetes\\diabetes_prediction_dataset.csv'
+    file_path = './/extra//diabetes//diabetes_prediction_dataset.csv'
+    df = pd.read_csv(file_path)
+    df_1 = df[df['diabetes'] == 1]
+    df_0 = df[df['diabetes'] == 0].sample(frac=0.092)
+    df_all = pd.concat([df_0, df_1])
+
+    # save df clean to csv
+    file_path_clean = './/extra//diabetes//diabetes_clean.csv'
+    df_all.to_csv(file_path_clean, index=False)
     # Open the CSV file
-    with open(file_path, newline='') as csvfile:
+    with open(file_path_clean, newline='') as csvfile:
         # Create a CSV reader
         csv_reader = csv.reader(csvfile)
         for line in csv_reader:
@@ -202,17 +210,15 @@ def load_diabetes():
     # X = scaler.fit_transform(X) * 2 - 1
     class_names = [0, 1]
     print('loaded data,  {} rows, {} columns'.format(n, d))
-    return X, y, question_names
+    return X, y, question_names, len(columns_without_label)
 
 
 def diabetes_prob_actions():
-    # gender, age, hypertension, heart_disease, smoking_history, bmi, HbA1c_level, blood_glucose_level
-    cost_list = [1, 1, 0.5, 1, 1, 0.8, 0.1, 0.1]
+    cost_list = np.array(np.ones(9))
     return torch.from_numpy(np.array(cost_list))
 
 
 def covid_prob_actions():
-    # gender, age, hypertension, heart_disease, smoking_history, bmi, HbA1c_level, blood_glucose_level
     cost_list = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     return torch.from_numpy(np.array(cost_list))
 
