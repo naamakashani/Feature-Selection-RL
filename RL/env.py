@@ -19,12 +19,12 @@ class myEnv(gym.Env):
         episode_length = flags.episode_length
         self.device = device
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,
-                                                                                test_size=0.017)
+                                                                                test_size=0.3)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
                                                                               self.y_train,
-                                                                              test_size=0.017)
+                                                                              test_size=0.05)
         self.episode_length = episode_length
-        self.action_probs = utils.covid_prob_actions()
+        self.action_probs = utils.diabetes_prob_actions()
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
             save_dir = os.path.join(os.getcwd(), 'model_guesser')
@@ -71,7 +71,7 @@ class myEnv(gym.Env):
         to the q values, so that questions that were already
         asked will not be asked again.
         """
-        mask = torch.ones(self.guesser.features_size + 1)
+        mask = torch.ones(self.guesser.features_size+1)
         mask = mask.to(device=self.device)
 
         return mask
