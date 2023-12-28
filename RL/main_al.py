@@ -1,18 +1,22 @@
-import shutil
 import torch.nn
 from collections import deque
 from typing import List, Tuple
-from itertools import count
 from sklearn.metrics import confusion_matrix
 from env import *
 from agent import *
 from ReplayMemory import *
+from itertools import count
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--save_dir",
                     type=str,
                     default='ddqn_models',
                     help="Directory for saved models")
+parser.add_argument("--directory",
+                    type=str,
+                    default="C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL",
+                    help="Directory for saved models")
+
 parser.add_argument("--gamma",
                     type=float,
                     default=0.85,
@@ -154,13 +158,12 @@ def play_episode(env,
         t += 1
         # check
         if t == FLAGS.episode_length:
-            a = agent.output_dim - 1
-            s2, r, done, info = env.step(a, mask)
-            mask[a] = 0
-            total_reward += r
-            replay_memory.push(s, a, r, s2, done)
-            t += 1
-
+            # a = agent.output_dim - 1
+            # s2, r, done, info = env.step(a, mask)
+            # mask[a] = 0
+            # total_reward += r
+            # replay_memory.push(s, a, r, s2, done)
+            # t += 1
             break
 
     if train_dqn:
@@ -234,6 +237,15 @@ def save_networks(i_episode: int, env, agent,
     os.rename(dqn_save_path + '~', dqn_save_path)
 
 
+# Function to extract states from replay memory
+def extract_states_from_replay_memory(replay_memory):
+    states = []
+    for experience in replay_memory:
+        state = experience['state']  # Assuming 'state' key holds the state information
+        states.append(state)
+    return np.array(states)
+
+
 def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
                   val_acc=None) -> None:
     """ A method to load parameters of guesser and dqn """
@@ -265,7 +277,7 @@ def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
 def main():
     # define environment and agent (needed for main and test)
     env = myEnv(flags=FLAGS,
-                    device=device)
+                device=device)
     clear_threshold = 1.
     input_dim, output_dim = get_env_dim(env)
     agent = Agent(input_dim,
@@ -274,7 +286,6 @@ def main():
 
     agent.dqn.to(device=device)
     env.guesser.to(device=device)
-
 
     # store best result
     best_val_acc = 0
@@ -291,7 +302,6 @@ def main():
 
     replay_memory = ReplayMemory(FLAGS.capacity)
     """
-    
 
     for i in count(1):
         train_dqn = True
@@ -328,11 +338,11 @@ def main():
 
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
-            """
-
+        """
     test(env, agent, input_dim, output_dim)
 
     show_sample_paths(6, env, agent)
+    background_data = extract_states_from_replay_memory(replay_memory)
 
 
 def val(i_episode: int,
@@ -385,6 +395,7 @@ def val(i_episode: int,
 
 
 def test(env, agent, input_dim, output_dim):
+    total_steps = 0
     """ Computes performance nad test data """
 
     print('Loading best networks')
@@ -396,6 +407,7 @@ def test(env, agent, input_dim, output_dim):
     print('Computing predictions of test data')
     n_test = len(env.X_test)
     for i in range(n_test):
+        number_of_steps = 0
         state = env.reset(mode='test',
                           patient=i,
                           train_guesser=False)
@@ -403,11 +415,10 @@ def test(env, agent, input_dim, output_dim):
 
         # run episode
         for t in range(FLAGS.episode_length):
-
+            number_of_steps += 1
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
             mask[action] = 0
-
             # take the action
             state, reward, done, guess = env.step(action, mask, mode='test')
 
@@ -415,19 +426,29 @@ def test(env, agent, input_dim, output_dim):
                 y_hat_test[i] = env.guess
 
             if done:
+                total_steps += number_of_steps
                 break
         if guess == -1:
+            number_of_steps += 1
             a = agent.output_dim - 1
             s2, r, done, info = env.step(a, mask)
             y_hat_test[i] = env.guess
+            total_steps += number_of_steps
 
     C = confusion_matrix(env.y_test, y_hat_test)
     print('confusion matrix: ')
     print(C)
-
     acc = np.sum(np.diag(C)) / len(env.y_test)
-
     print('Test accuracy: ', np.round(acc, 3))
+    print('Average number of steps: ', np.round(total_steps / n_test, 3))
+
+
+# def generate_shap_values(agent, env, state, data):
+#     # Generate SHAP values using your preferred SHAP library and model explainer
+#     # For example, using KernelExplainer from the SHAP library
+#     explainer = shap.KernelExplainer(agent.get_action, data)
+#     shap_values = explainer.shap_values(state)
+#     return shap_values
 
 
 def show_sample_paths(n_patients, env, agent):
@@ -457,33 +478,37 @@ def show_sample_paths(n_patients, env, agent):
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
             mask[action] = 0
 
-            if action != env.n_questions:
-                print('Step: {}, Question: '.format(t + 1), env.question_names[action], ', Answer: ',
+            if action != env.guesser.features_size:
+                print('Step: {}, Question: '.format(t + 1), env.guesser.question_names[action], ', Answer: ',
                       env.X_test[idx, action])
 
             # take the action
             state, reward, done, guess = env.step(action, mask, mode='test')
 
             if guess != -1:
-                print('Step: {}, Ready to make a guess: Prob(y=1)={:1.3f}, Guess: y={}, Ground truth: {}'.format(t + 1,
-                                                                                                                 env.outcome_prob,
-                                                                                                                 guess,
-                                                                                                                 env.y_test[
-                                                                                                                     idx]))
+                print('Step: {}, Ready to make a guess: Prob({})={:1.3f}, Guess: y={}, Ground truth: {}'.format(t + 1,
+                                                                                                                guess,
+                                                                                                                env.probs[
+                                                                                                                    guess],
+                                                                                                                guess,
+                                                                                                                env.y_test[
+                                                                                                                    idx]))
+
                 break
 
         if guess == -1:
             state, reward, done, guess = env.step(14, mask, mode='test')
-            print(
-                'Step: {}, Ready to make a guess: Prob(y=1)={:1.3f}, Guess: y={}, Ground truth: {}'.format(t + 1,
-                                                                                                           env.outcome_prob,
-                                                                                                           guess,
-                                                                                                           env.y_test[
-                                                                                                               idx]))
+
+            print('Step: {}, Ready to make a guess: Prob({})={:1.3f}, Guess: y={}, Ground truth: {}'.format(t + 1,
+                                                                                                            guess,
+                                                                                                            env.probs[
+                                                                                                                guess],
+                                                                                                            guess,
+                                                                                                            env.y_test[
+                                                                                                                idx]))
         print('Episode terminated\n')
 
 
 if __name__ == '__main__':
-    desired_directory = "C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL"
-    os.chdir(desired_directory)
+    os.chdir(FLAGS.directory)
     main()
