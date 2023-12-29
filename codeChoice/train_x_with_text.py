@@ -32,15 +32,15 @@ from torch.utils.data import DataLoader, TensorDataset
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--save_dir_models",
                     type=str,
-                    default='./mlp_models',
+                    default=r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\mlp_models',
                     help="Directory for saved models")
 parser.add_argument("--save_dir_shap",
                     type=str,
-                    default='./shap_plots',
+                    default=r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\shap_plots',
                     help="Directory for shap plots")
 parser.add_argument("--load_dir",
                     type=str,
-                    default='./word_embeddings',
+                    default=r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\word_embeddings',
                     help="Directory for saved models")
 parser.add_argument("--load_pretrained_embeddings",
                     type=int,
@@ -52,7 +52,7 @@ parser.add_argument("--inputs",
                     help="x | t | both")
 parser.add_argument("--outcomes",
                     type=str,
-                    default='both',
+                    default='dtd',
                     help="both | dtd | readmission")
 parser.add_argument("--embedding_dim",
                     type=int,
@@ -104,7 +104,7 @@ parser.add_argument("--val_interval",
                     help="Do validation every this number of epochs")
 parser.add_argument("--max_vals_wo_improvement",
                     type=int,
-                    default=20,
+                    default=3,
                     help="number of val steps without improvement before stop training")
 parser.add_argument("--vals_to_unfreeze_embedding",
                     type=int,
@@ -230,7 +230,7 @@ def pad_corpus(idxs_corpus, seq_length=FLAGS.seq_length):
 
 ''' ------- Load data -------'''
 
-outcomes = pd.read_pickle('data/outcomes.pkl')
+outcomes = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\outcomes.pkl')
 n_outcomes = outcomes.shape[1]
 outcome_names = outcomes.columns
 Y = outcomes.to_numpy()
@@ -252,17 +252,17 @@ elif FLAGS.outcomes == 'all':
     pass
 else:
     print ('FLAGS.outcomes not recognized')
-X_pd = pd.read_pickle('data/preprocessed_X.pkl')
+X_pd = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X.pkl')
 X = X_pd.to_numpy()
 scaler = StandardScaler()
 #X = scaler.fit_transform(X) #Do not scale if using shap
-Data = pd.read_csv('data/new_data_apr22.csv')
+Data = pd.read_csv(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\new_data_apr22.csv')
 admission_date = pd.to_datetime(Data['Reference Event-Visit Start Date']) 
 
 X = X.astype('float32')
 Y = Y.astype('int')
 
-Text = pd.read_pickle('data/text.pkl')['Free-text-all-exam-res']#['ct_general']
+Text = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\text.pkl')['Free-text-all-exam-res']#['ct_general']
 tokenized_corpus = tokenize_corpus(Text)
 
 if FLAGS.load_pretrained_embeddings:
@@ -771,11 +771,11 @@ def x_train():
             
             losses.append(loss)
         
-            if step % 10 == 0:
-                print('Epoch: {}, Step: {}, loss: {:.3f}'.format(epoch + 1, 
-                                                                 step, 
+            if step % 1000 == 0:
+                print('Epoch: {}, Step: {}, loss: {:.3f}'.format(epoch + 1,
+                                                                 step,
                                                                  np.mean(losses)))
-                print('Learning rate = %.7f' % x_optim.param_groups[0]['lr']) 
+                print('Learning rate = %.7f' % x_optim.param_groups[0]['lr'])
                       
             step += 1
        
@@ -821,7 +821,7 @@ def t_train():
             
             losses.append(loss)
         
-            if step % 10 == 0:
+            if step % 1000 == 0:
                 print('Epoch: {}, Step: {}, loss: {:.3f}'.format(epoch + 1, 
                                                                  step, 
                                                                  np.mean(losses)))
@@ -873,7 +873,7 @@ def train_meta(x_probs, t_probs):
             
             losses.append(loss)
         
-            if step % 10 == 0:
+            if step % 1000 == 0:
                 print('Epoch: {}, Step: {}, loss: {:.3f}'.format(epoch + 1, 
                                                                  step, 
                                                                  np.mean(losses)))
@@ -1166,6 +1166,7 @@ def main():
     interpret_t_model()
     
 if __name__ == '__main__':
+    os.chdir("C:\\Users\\kashann\\PycharmProjects\\choiceMira\\codeChoice")
     main()
     
 '''

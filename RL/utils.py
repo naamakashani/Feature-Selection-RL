@@ -15,6 +15,53 @@ from sklearn.tree import DecisionTreeClassifier
 import csv
 import pandas as pd
 import torch
+from sklearn.utils import resample
+
+
+def load_data_labels():
+    outcomes = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\outcomes.pkl')
+    n_outcomes = outcomes.shape[1]
+    outcome_names = outcomes.columns
+    Y = outcomes.to_numpy()
+    dtd_indices = [0]  # [i for i, name in enumerate(outcome_names) if 'dtd' in name]
+    Y = Y[:, dtd_indices]
+    n_outcomes = len(dtd_indices)
+    outcome_names = outcome_names[dtd_indices]
+    X_pd = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X.pkl')
+    X = X_pd.to_numpy()
+    scaler = StandardScaler()
+    # X = scaler.fit_transform(X) #Do not scale if using shap
+    Data = pd.read_csv(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\new_data_apr22.csv')
+    admission_date = pd.to_datetime(Data['Reference Event-Visit Start Date'])
+
+    X = X.astype('float32')
+    Y = Y.astype('int')
+    Y = Y.reshape(-1)
+    # Finding indices for both label categories
+    label_0_indices = np.where(Y == 0)[0]
+    label_1_indices = np.where(Y == 1)[0]
+
+    # Count the number of samples in each category
+    count_label_0 = len(label_0_indices)
+    count_label_1 = len(label_1_indices)
+
+    # Balance the dataset by adjusting samples for each label
+    if count_label_0 > count_label_1:
+        # Select a random subset of label 0 indices to match label 1 count
+        selected_indices = np.random.choice(label_0_indices, count_label_1, replace=False)
+        balanced_indices = np.concatenate([selected_indices, label_1_indices])
+        np.random.shuffle(balanced_indices)
+    else:
+        # Select a random subset of label 1 indices to match label 0 count
+        selected_indices = np.random.choice(label_1_indices, count_label_0, replace=False)
+        balanced_indices = np.concatenate([label_0_indices, selected_indices])
+        np.random.shuffle(balanced_indices)
+
+    # Update data and labels with the balanced dataset
+    balanced_data = X[balanced_indices]
+    balanced_labels = Y[balanced_indices]
+
+    return balanced_data, balanced_labels, X_pd.columns.tolist(), len(X_pd.columns)
 
 
 def load_data(case):
@@ -215,6 +262,11 @@ def load_diabetes():
 
 def diabetes_prob_actions():
     cost_list = np.array(np.ones(9))
+    return torch.from_numpy(np.array(cost_list))
+
+
+def prob_actions():
+    cost_list = np.array(np.ones(37))
     return torch.from_numpy(np.array(cost_list))
 
 

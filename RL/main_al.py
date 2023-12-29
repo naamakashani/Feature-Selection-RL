@@ -14,7 +14,7 @@ parser.add_argument("--save_dir",
                     help="Directory for saved models")
 parser.add_argument("--directory",
                     type=str,
-                    default="C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL",
+                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL",
                     help="Directory for saved models")
 
 parser.add_argument("--gamma",
@@ -301,7 +301,7 @@ def main():
     steps = deque(maxlen=100)
 
     replay_memory = ReplayMemory(FLAGS.capacity)
-    """
+
 
     for i in count(1):
         train_dqn = True
@@ -338,11 +338,11 @@ def main():
 
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
-        """
+
     test(env, agent, input_dim, output_dim)
 
     show_sample_paths(6, env, agent)
-    background_data = extract_states_from_replay_memory(replay_memory)
+
 
 
 def val(i_episode: int,

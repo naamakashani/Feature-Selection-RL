@@ -24,7 +24,7 @@ class myEnv(gym.Env):
                                                                               self.y_train,
                                                                               test_size=0.05)
         self.episode_length = episode_length
-        self.action_probs = utils.diabetes_prob_actions()
+        self.action_probs = utils.prob_actions()
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
             save_dir = os.path.join(os.getcwd(), 'model_guesser')

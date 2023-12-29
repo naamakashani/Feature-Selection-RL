@@ -13,7 +13,7 @@ import RL.utils as utils
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--directory",
                     type=str,
-                    default="C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL",
+                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL",
                     help="Directory for saved models")
 
 parser.add_argument("--batch_size",
@@ -22,7 +22,7 @@ parser.add_argument("--batch_size",
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=40,
+                    default=400,
                     help="number of epochs")
 parser.add_argument("--hidden-dim",
                     type=int,
@@ -75,7 +75,7 @@ class Guesser(nn.Module):
         Declare layers for the model
         '''
         super().__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
+        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
         self.fc0 = nn.Linear(self.features_size, 128)
         self.fc1 = nn.Linear(128, 64)
         self.fc2 = nn.Linear(64, 2)

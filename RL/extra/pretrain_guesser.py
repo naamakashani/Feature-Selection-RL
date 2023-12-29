@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import utils
+import RL.utils as utils
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -43,7 +43,7 @@ parser.add_argument("--case",
                     help="Which data to use")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=50,
+                    default=5,
                     help="Number of validation trials without improvement")
 parser.add_argument("--val_interval",
                     type=int,
@@ -133,7 +133,8 @@ def save_network(i_episode, auc=None):
     os.rename(guesser_save_path + '~', guesser_save_path)
 
 # Load data and randomly split to train, validation and test sets
-X, y, question_names, class_names, scaler  = utils.load_data(case=FLAGS.case)
+os.chdir(r'C:\Users\kashann\PycharmProjects\choiceMira\RL')
+X, y, question_names, len_fitures= utils.load_diabetes()
 n_questions = X.shape[1]
 
 # Initialize guesser
@@ -242,7 +243,45 @@ def val(i_episode : int,
     
     else:
         return best_val_auc
-    
+
+def test(X_test, y_test):
+    '''
+    Test the model on the test set
+    :param model: model to test
+    :param X_test: data to test on
+    :param y_test: labels to test on
+    :return: accuracy of the model
+    '''
+    model = Guesser(2 * n_questions)
+    guesser_state_dict = torch.load(r'C:\Users\kashann\PycharmProjects\choiceMira\RL\pretrained_guesser_models\best_guesser.pth')
+    guesser.load_state_dict(guesser_state_dict)
+    guesser.to(device=device)
+
+    model.eval()
+    total = 0
+    correct = 0
+    y_hat = []
+    with torch.no_grad():
+        for x in X_test:
+            # create tensor form x
+            x = torch.Tensor(x).float()
+            x = np.concatenate([x, np.ones(n_questions)])
+            guesser_input = guesser._to_variable(x.reshape(-1, 2 * n_questions))
+            guesser_input = guesser_input.to(device=device)
+            logits, probs = model(guesser_input)
+            predicted = torch.argmax(probs).item()
+            y_hat.append(predicted)
+
+    # compare y_hat to y_test
+    # y_hat = [tensor.item() for tensor in y_hat]
+    for i in range(len(y_hat)):
+        if y_hat[i] == y_test[i]:
+            correct += 1
+        total += 1
+    accuracy = correct / total
+    print('Accuracy of the network on the {} test images: {:.2%}'.format(len(X_test), accuracy))
+
 
 if __name__ == '__main__':
-    main()
+    # main()
+    test(X_test, y_test)
