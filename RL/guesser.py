@@ -1,4 +1,5 @@
 import argparse
+from itertools import count
 
 import numpy as np
 from fastai.data.load import DataLoader
@@ -50,12 +51,16 @@ parser.add_argument("--weight_decay",
                     help="l_2 weight penalty")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=1000,
+                    default=10,
                     help="Interval for calculating validation reward and saving model")
 parser.add_argument("--episode_length",
                     type=int,
                     default=7,
                     help="Episode length")
+parser.add_argument("--val_trials_wo_im",
+                    type=int,
+                    default=30,
+                    help="Number of validation trials without improvement")
 # Environment params
 parser.add_argument("--g_hidden-dim",
                     type=int,
@@ -68,36 +73,6 @@ parser.add_argument("--g_weight_decay",
 
 FLAGS = parser.parse_args(args=[])
 
-"""
-
-class Guesser(nn.Module):
-    def __init__(self):
-        '''
-        Declare layers for the model
-        '''
-        super().__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
-        self.fc0 = nn.Linear(self.features_size, 128)
-        self.fc1 = nn.Linear(128, 64)
-        self.fc2 = nn.Linear(64, 2)
-        self.criterion = nn.CrossEntropyLoss()
-
-        self.optimizer = torch.optim.Adam(self.parameters(),
-                                          weight_decay=0.,
-                                          lr=1e-4)
-
-        self.path_to_save = os.path.join(os.getcwd(), 'model_guesser')
-
-    def forward(self, x):
-        ''' Forward pass through the network, returns log_softmax values '''
-        if not isinstance(x, np.ndarray):
-            x = x.to(self.fc0.weight.dtype)
-        x = F.relu(self.fc0(x))
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.softmax(x)
-        """
-
 
 class Guesser(nn.Module):
     """
@@ -105,13 +80,13 @@ class Guesser(nn.Module):
     """
 
     def __init__(self,
-                 state_dim,
                  hidden_dim=FLAGS.hidden_dim,
                  num_classes=2):
-        super(Guesser, self).__init__()
 
+        super(Guesser, self).__init__()
+        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
         self.layer1 = torch.nn.Sequential(
-            torch.nn.Linear(state_dim, hidden_dim),
+            torch.nn.Linear(self.features_size, hidden_dim),
             torch.nn.PReLU(),
         )
 
@@ -127,18 +102,13 @@ class Guesser(nn.Module):
 
         # output layer
         self.logits = nn.Linear(hidden_dim, num_classes)
-        # self.apply(self._convert_weights_to_float64)
 
         self.criterion = nn.CrossEntropyLoss()
 
         self.optimizer = torch.optim.Adam(self.parameters(),
                                           weight_decay=FLAGS.weight_decay,
                                           lr=FLAGS.lr)
-
-    def _convert_weights_to_float64(self, layer):
-        if isinstance(layer, nn.Linear):
-            layer.weight.data = layer.weight.data.double()
-            layer.bias.data = layer.bias.data.double()
+        self.path_to_save = os.path.join(os.getcwd(), 'model_guesser')
 
     def forward(self, x):
         x = self.layer1(x)
@@ -146,7 +116,10 @@ class Guesser(nn.Module):
         x = self.layer3(x)
 
         logits = self.logits(x)
-        probs = F.softmax(logits, dim=1)
+        if logits.dim() == 2:
+            probs = F.softmax(logits, dim=1)
+        else:
+            probs = F.softmax(logits, dim=-1)
 
         return probs
 
@@ -160,7 +133,7 @@ class Guesser(nn.Module):
         return torch.autograd.Variable(torch.Tensor(x))
 
 
-def mask(model, images: np.array) -> np.array:
+def mask(images: np.array) -> np.array:
     '''
     Mask feature of the input
     :param images: input
@@ -183,6 +156,63 @@ def mask(model, images: np.array) -> np.array:
         return images
 
 
+def val(model, val_loader, best_val_auc=0):
+    correct = 0
+    total = 0
+    model.eval()
+    with torch.no_grad():
+        for images, labels in val_loader:
+            images = images.view(images.shape[0], -1)
+            # call mask function on images
+            images = mask(images)
+            images = images.float()
+            output = model(images)
+            _, predicted = torch.max(output.data, 1)
+            y_pred = []
+            for y in labels:
+                y = torch.Tensor(y).long()
+                y_pred.append(y)
+            labels = torch.Tensor(np.array(y_pred)).long()
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    accuracy = correct / total
+    print(f'Validation Accuracy: {accuracy:.2f}')
+    # if accuracy > best_val_auc:
+        # save_model(model)
+    return accuracy
+
+
+def test(val_loader, features_size, path_to_save):
+    guesser_filename = 'best_guesser.pth'
+
+    guesser_load_path = os.path.join(path_to_save, guesser_filename)
+
+    model = Guesser(features_size)
+
+    guesser_state_dict = torch.load(guesser_load_path)
+    model.load_state_dict(guesser_state_dict)
+    correct = 0
+    total = 0
+    model.eval()
+    with torch.no_grad():
+        for images, labels in val_loader:
+            images = images.view(images.shape[0], -1)
+            # call mask function on images
+            images = mask(images)
+            images = images.float()
+            output = model(images)
+            _, predicted = torch.max(output.data, 1)
+            y_pred = []
+            for y in labels:
+                y = torch.Tensor(y).long()
+                y_pred.append(y)
+            labels = torch.Tensor(np.array(y_pred)).long()
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    accuracy = correct / total
+    print(f'Test Accuracy: {accuracy:.2f}')
+
+
 def train_model(model,
                 nepochs, train_loader, val_loader):
     '''
@@ -193,10 +223,12 @@ def train_model(model,
     train_loader - dataloader for the trainset
     val_loader - dataloader for the valset
     '''
-    for e in range(nepochs):
+    val_trials_without_improvement = 0
+    best_val_auc = 0
+    for e in range (1,nepochs):
         for images, labels in train_loader:
             images = images.view(images.shape[0], -1)
-            images = mask(model, images)
+            images = mask(images)
             images = images.float()
             model.train()
             model.optimizer.zero_grad()
@@ -209,65 +241,29 @@ def train_model(model,
             loss = model.criterion(output, labels)
             loss.backward()
             model.optimizer.step()
+        if e % FLAGS.val_interval == 0:
+            new_best_val_auc = val(model, val_loader)
+            if new_best_val_auc > best_val_auc:
+                best_val_auc = new_best_val_auc
+                val_trials_without_improvement = 0
+            else:
+                val_trials_without_improvement += 1
 
-        with torch.no_grad():
-            if e % 2 == 0:
-                for images, labels in val_loader:
-                    images = images.view(images.shape[0], -1)
-                    # call mask function on images
-                    images = mask(model, images)
-                    images = images.float()
-                    # Training pass
-                    model.eval()
-                    output = model(images)
-                    y_pred = []
-                    for y in labels:
-                        y = torch.Tensor(y).long()
-                        y_pred.append(y)
-                    labels = torch.Tensor(np.array(y_pred)).long()
-
-                    val_loss = model.criterion(output, labels)
-                    print("val_loss: ", val_loss.item())
+            # check whether to stop training
+            if val_trials_without_improvement == FLAGS.val_trials_wo_im:
+                print('Did not achieve val AUC improvement for {} trials, training is done.'.format(
+                    FLAGS.val_trials_wo_im))
+                break
 
 
-def test(model, X_test, y_test):
-    '''
-    Test the model on the test set
-    :param model: model to test
-    :param X_test: data to test on
-    :param y_test: labels to test on
-    :return: accuracy of the model
-    '''
-    model.eval()
-    total = 0
-    correct = 0
-    y_hat = []
-    with torch.no_grad():
-        for x in X_test:
-            x = mask(model, x)
-            # create tensor form x
-            x = torch.Tensor(x).float()
-            output = model(x)
-            _, predicted = torch.max(output.data, 0)
-            y_hat.append(predicted)
-
-    # compare y_hat to y_test
-    y_hat = [tensor.item() for tensor in y_hat]
-    for i in range(len(y_hat)):
-        if y_hat[i] == y_test[i]:
-            correct += 1
-        total += 1
-    accuracy = correct / total
-    print('Accuracy of the network on the {} test images: {:.2%}'.format(len(X_test), accuracy))
-
-
-def save_model(model, path):
+def save_model(model):
     '''
     Save the model to a given path
     :param model: model to save
     :param path: path to save the model to
     :return: None
     '''
+    path = model.path_to_save
     if not os.path.exists(path):
         os.makedirs(path)
     guesser_filename = 'best_guesser.pth'
@@ -284,10 +280,9 @@ def main():
     Train a neural network to guess the correct answer
     :return:
     '''
-    X, y, question_names, features_size = utils.load_diabetes()
-    model = Guesser(features_size)
-    X_train, X_test, y_train, y_test = train_test_split(X,
-                                                        y,
+    model = Guesser()
+    X_train, X_test, y_train, y_test = train_test_split(model.X,
+                                                        model.y,
                                                         test_size=0.33,
                                                         random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_train,
@@ -310,9 +305,11 @@ def main():
     data_loader_val = DataLoader(dataset_val, batch_size=FLAGS.batch_size, shuffle=True)
     train_model(model, FLAGS.num_epochs,
                 data_loader_train, data_loader_val)
-
-    test(model, X_test, y_test)
-    save_model(model, model.path_to_save)
+    X_tensor_test = torch.Tensor(X_test)
+    y_tensor_test = torch.Tensor(y_test)  # Assuming y_data contains integers
+    dataset_test = TensorDataset(X_tensor_test, y_tensor_test)
+    data_loader_test = DataLoader(dataset_test, batch_size=FLAGS.batch_size, shuffle=True)
+    test(data_loader_test, model.features_size, model.path_to_save)
 
 
 if __name__ == "__main__":

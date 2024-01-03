@@ -15,7 +15,6 @@ class myEnv(gym.Env):
                  oversample=True,
                  load_pretrained_guesser=True):
         self.guesser = Guesser()
-
         episode_length = flags.episode_length
         self.device = device
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,

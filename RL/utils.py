@@ -19,6 +19,7 @@ from sklearn.utils import resample
 
 
 def load_data_labels():
+    filter_preprocess_X()
     outcomes = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\outcomes.pkl')
     n_outcomes = outcomes.shape[1]
     outcome_names = outcomes.columns
@@ -27,7 +28,8 @@ def load_data_labels():
     Y = Y[:, dtd_indices]
     n_outcomes = len(dtd_indices)
     outcome_names = outcome_names[dtd_indices]
-    X_pd = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X.pkl')
+    # X_pd = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X.pkl')
+    X_pd = pd.read_csv(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X_filtered.csv')
     X = X_pd.to_numpy()
     scaler = StandardScaler()
     # X = scaler.fit_transform(X) #Do not scale if using shap
@@ -62,6 +64,28 @@ def load_data_labels():
     balanced_labels = Y[balanced_indices]
 
     return balanced_data, balanced_labels, X_pd.columns.tolist(), len(X_pd.columns)
+
+
+def filter_preprocess_X():
+    df = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X.pkl')
+    # i want to group 3 clumns together by or sign
+    df['aspirin'] = df['Medications anticoagulants: ASPIRIN'] | df['Medications anticoagulants: CARTIA'] | df[
+        'Medications anticoagulants: MICROPIRIN']
+    df.drop(columns=['Medications anticoagulants: ASPIRIN'], inplace=True)
+    df.drop(columns=['Medications anticoagulants: CARTIA'], inplace=True)
+    df.drop(columns=['Medications anticoagulants: MICROPIRIN'], inplace=True)
+    df['Warfarin Sodium'] = df['Medications anticoagulants: COUMADIN'] | df['Medications anticoagulants: HEPARIN']
+    df.drop(columns=['Medications anticoagulants: COUMADIN'], inplace=True)
+    df.drop(columns=['Medications anticoagulants: HEPARIN'], inplace=True)
+    df['clopidogrel'] = df['Medications anticoagulants: CLOPIDOGREL'] | df['Medications anticoagulants: PLAVIX']
+    df.drop(columns=['Medications anticoagulants: CLOPIDOGREL'], inplace=True)
+    df.drop(columns=['Medications anticoagulants: PLAVIX'], inplace=True)
+    df['doxazosin'] = df['Medications hypertnesive: CADEX'] | df['Medications hypertnesive: DOXALOC']
+    df.drop(columns=['Medications hypertnesive: CADEX'], inplace=True)
+    df.drop(columns=['Medications hypertnesive: DOXALOC'], inplace=True)
+    # write df to csv
+    df.to_csv(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X_filtered.csv',
+              index=False)
 
 
 def load_data(case):
