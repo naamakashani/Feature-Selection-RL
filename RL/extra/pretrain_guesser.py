@@ -138,7 +138,7 @@ X, y, question_names, len_fitures= utils.load_diabetes()
 n_questions = X.shape[1]
 
 # Initialize guesser
-guesser = Guesser(2 * n_questions)   
+guesser = Guesser(int( n_questions))
 guesser.to(device=device)      
 
 X_train, X_test, y_train, y_test = train_test_split(X, 
@@ -182,8 +182,8 @@ def main():
          ind = np.random.randint(len(class_1_inds))
          patient = class_1_inds[ind]
      x = X_train[patient]
-     x = np.concatenate([x, np.ones(n_questions)])
-     guesser_input = guesser._to_variable(x.reshape(-1, 2 * n_questions))
+     # x = np.concatenate([x, np.ones(int(0.5 * n_questions))])
+     guesser_input = guesser._to_variable(x.reshape(-1, int( n_questions)))
      guesser_input = guesser_input.to(device=device)
      guesser.train(mode=False)
      logits, probs = guesser(guesser_input)
@@ -224,8 +224,8 @@ def val(i_episode : int,
     
     for i in range(len(X_val)):
         x = X_val[i]
-        x = np.concatenate([x, np.ones(n_questions)])
-        guesser_input = guesser._to_variable(x.reshape(-1, 2 * n_questions))
+        # x = np.concatenate([x, np.ones(int(0.5 * n_questions))])
+        guesser_input = guesser._to_variable(x.reshape(-1, int( n_questions) ))
         guesser_input = guesser_input.to(device=device)
         guesser.train(mode=False)
         logits, probs = guesser(guesser_input)
@@ -252,7 +252,7 @@ def test(X_test, y_test):
     :param y_test: labels to test on
     :return: accuracy of the model
     '''
-    model = Guesser(2 * n_questions)
+    model = Guesser(int( n_questions))
     guesser_state_dict = torch.load(r'C:\Users\kashann\PycharmProjects\choiceMira\RL\pretrained_guesser_models\best_guesser.pth')
     guesser.load_state_dict(guesser_state_dict)
     guesser.to(device=device)
@@ -265,8 +265,7 @@ def test(X_test, y_test):
         for x in X_test:
             # create tensor form x
             x = torch.Tensor(x).float()
-            x = np.concatenate([x, np.ones(n_questions)])
-            guesser_input = guesser._to_variable(x.reshape(-1, 2 * n_questions))
+            guesser_input = guesser._to_variable(x.reshape(-1, int( n_questions)))
             guesser_input = guesser_input.to(device=device)
             logits, probs = model(guesser_input)
             predicted = torch.argmax(probs).item()
@@ -283,5 +282,5 @@ def test(X_test, y_test):
 
 
 if __name__ == '__main__':
-    # main()
+    main()
     test(X_test, y_test)

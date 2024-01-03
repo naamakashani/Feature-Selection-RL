@@ -68,6 +68,7 @@ parser.add_argument("--g_weight_decay",
 
 FLAGS = parser.parse_args(args=[])
 
+"""
 
 class Guesser(nn.Module):
     def __init__(self):
@@ -95,6 +96,68 @@ class Guesser(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.softmax(x)
+        """
+
+
+class Guesser(nn.Module):
+    """
+    implements a net that guesses the outcome given the state
+    """
+
+    def __init__(self,
+                 state_dim,
+                 hidden_dim=FLAGS.hidden_dim,
+                 num_classes=2):
+        super(Guesser, self).__init__()
+
+        self.layer1 = torch.nn.Sequential(
+            torch.nn.Linear(state_dim, hidden_dim),
+            torch.nn.PReLU(),
+        )
+
+        self.layer2 = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            torch.nn.PReLU(),
+        )
+
+        self.layer3 = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim, hidden_dim),
+            torch.nn.PReLU(),
+        )
+
+        # output layer
+        self.logits = nn.Linear(hidden_dim, num_classes)
+        # self.apply(self._convert_weights_to_float64)
+
+        self.criterion = nn.CrossEntropyLoss()
+
+        self.optimizer = torch.optim.Adam(self.parameters(),
+                                          weight_decay=FLAGS.weight_decay,
+                                          lr=FLAGS.lr)
+
+    def _convert_weights_to_float64(self, layer):
+        if isinstance(layer, nn.Linear):
+            layer.weight.data = layer.weight.data.double()
+            layer.bias.data = layer.bias.data.double()
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+
+        logits = self.logits(x)
+        probs = F.softmax(logits, dim=1)
+
+        return probs
+
+    def _to_variable(self, x: np.ndarray) -> torch.Tensor:
+        """torch.Variable syntax helper
+        Args:
+            x (np.ndarray): 2-D tensor of shape (n, input_dim)
+        Returns:
+            torch.Tensor: torch variable
+        """
+        return torch.autograd.Variable(torch.Tensor(x))
 
 
 def mask(model, images: np.array) -> np.array:
@@ -105,7 +168,7 @@ def mask(model, images: np.array) -> np.array:
     '''
     # check if images has 1 dim
     if len(images.shape) == 1:
-        for i in range(model.features_size):
+        for i in range(images.shape[0]):
             # choose to mask in probability of 0.3
             if (np.random.rand() < 0.3):
                 images[i] = 0
@@ -113,7 +176,7 @@ def mask(model, images: np.array) -> np.array:
     else:
 
         for j in range(int(len(images))):
-            for i in range(model.features_size):
+            for i in range(images[0].shape[0]):
                 # choose to mask in probability of 0.3
                 if (np.random.rand() < 0.3):
                     images[j][i] = 0
@@ -134,6 +197,7 @@ def train_model(model,
         for images, labels in train_loader:
             images = images.view(images.shape[0], -1)
             images = mask(model, images)
+            images = images.float()
             model.train()
             model.optimizer.zero_grad()
             output = model(images)
@@ -145,12 +209,14 @@ def train_model(model,
             loss = model.criterion(output, labels)
             loss.backward()
             model.optimizer.step()
+
         with torch.no_grad():
             if e % 2 == 0:
                 for images, labels in val_loader:
                     images = images.view(images.shape[0], -1)
                     # call mask function on images
                     images = mask(model, images)
+                    images = images.float()
                     # Training pass
                     model.eval()
                     output = model(images)
@@ -218,9 +284,10 @@ def main():
     Train a neural network to guess the correct answer
     :return:
     '''
-    model = Guesser()
-    X_train, X_test, y_train, y_test = train_test_split(model.X,
-                                                        model.y,
+    X, y, question_names, features_size = utils.load_diabetes()
+    model = Guesser(features_size)
+    X_train, X_test, y_train, y_test = train_test_split(X,
+                                                        y,
                                                         test_size=0.33,
                                                         random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_train,
