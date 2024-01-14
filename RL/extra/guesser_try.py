@@ -10,6 +10,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import RL.utils as utils
+from torch.utils.data import Subset
+from sklearn.metrics import confusion_matrix
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--directory",
@@ -51,7 +53,7 @@ parser.add_argument("--weight_decay",
                     help="l_2 weight penalty")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=10,
+                    default=2,
                     help="Interval for calculating validation reward and saving model")
 parser.add_argument("--episode_length",
                     type=int,
@@ -59,7 +61,7 @@ parser.add_argument("--episode_length",
                     help="Episode length")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=30,
+                    default=5,
                     help="Number of validation trials without improvement")
 # Environment params
 parser.add_argument("--g_hidden-dim",
@@ -84,7 +86,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
+        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim),
             torch.nn.PReLU(),
@@ -108,7 +110,7 @@ class Guesser(nn.Module):
         self.optimizer = torch.optim.Adam(self.parameters(),
                                           weight_decay=FLAGS.weight_decay,
                                           lr=FLAGS.lr)
-        self.path_to_save = os.path.join(os.getcwd(), 'model_guesser')
+        self.path_to_save = os.path.join(os.getcwd(), '../model_guesser')
 
     def forward(self, x):
         x = self.layer1(x)
@@ -156,12 +158,17 @@ def mask(images: np.array) -> np.array:
         return images
 
 
-def val(model, val_loader, best_val_auc=0):
+def val(model, val_loader_y1, val_loader_y0, best_val_auc=0):
     correct = 0
     total = 0
     model.eval()
+
     with torch.no_grad():
-        for images, labels in val_loader:
+        for _ in range(len(val_loader_y1)):
+            if np.random.rand() < 0.5:
+                images, labels = next(iter(val_loader_y1))
+            else:
+                images, labels = next(iter(val_loader_y0))
             images = images.view(images.shape[0], -1)
             # call mask function on images
             images = mask(images)
@@ -177,44 +184,50 @@ def val(model, val_loader, best_val_auc=0):
             correct += (predicted == labels).sum().item()
     accuracy = correct / total
     print(f'Validation Accuracy: {accuracy:.2f}')
-    # if accuracy > best_val_auc:
-        # save_model(model)
+    if accuracy > best_val_auc:
+        save_model(model)
     return accuracy
 
 
-def test(val_loader, features_size, path_to_save):
+def test(test_loader, path_to_save):
     guesser_filename = 'best_guesser.pth'
-
     guesser_load_path = os.path.join(path_to_save, guesser_filename)
-
-    model = Guesser(features_size)
-
+    model = Guesser()  # Assuming Guesser is your model class
     guesser_state_dict = torch.load(guesser_load_path)
     model.load_state_dict(guesser_state_dict)
-    correct = 0
-    total = 0
     model.eval()
+
+    y_true = []
+    y_pred = []
+
     with torch.no_grad():
-        for images, labels in val_loader:
+        for images, labels in test_loader:
             images = images.view(images.shape[0], -1)
             # call mask function on images
             images = mask(images)
             images = images.float()
             output = model(images)
             _, predicted = torch.max(output.data, 1)
-            y_pred = []
-            for y in labels:
-                y = torch.Tensor(y).long()
-                y_pred.append(y)
-            labels = torch.Tensor(np.array(y_pred)).long()
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-    accuracy = correct / total
+
+            # Append true and predicted labels to calculate confusion matrix
+            y_true.extend(labels.numpy())  # Assuming labels is a numpy array
+            y_pred.extend(predicted.numpy())  # Assuming predicted is a numpy array
+
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+
+    # Calculate and print confusion matrix
+    conf_matrix = confusion_matrix(y_true, y_pred)
+    print("Confusion Matrix:")
+    print(conf_matrix)
+
+    # Calculate accuracy
+    accuracy = np.sum(np.diag(conf_matrix)) / np.sum(conf_matrix)
     print(f'Test Accuracy: {accuracy:.2f}')
 
 
 def train_model(model,
-                nepochs, train_loader, val_loader):
+                nepochs, data_loader_y0, data_loader_y1, val_loader_y1, val_loader_y0):
     '''
     Train a pytorch model and evaluate it every 2 epoch.
     Params:
@@ -225,8 +238,12 @@ def train_model(model,
     '''
     val_trials_without_improvement = 0
     best_val_auc = 0
-    for e in range (1,nepochs):
-        for images, labels in train_loader:
+    for e in range(1, nepochs):
+        for _ in range(len(data_loader_y0)):
+            if np.random.rand() < 0.5:
+                images, labels = next(iter(data_loader_y0))
+            else:
+                images, labels = next(iter(data_loader_y1))
             images = images.view(images.shape[0], -1)
             images = mask(images)
             images = images.float()
@@ -242,7 +259,7 @@ def train_model(model,
             loss.backward()
             model.optimizer.step()
         if e % FLAGS.val_interval == 0:
-            new_best_val_auc = val(model, val_loader)
+            new_best_val_auc = val(model, val_loader_y1, val_loader_y0, best_val_auc)
             if new_best_val_auc > best_val_auc:
                 best_val_auc = new_best_val_auc
                 val_trials_without_improvement = 0
@@ -281,35 +298,59 @@ def main():
     :return:
     '''
     model = Guesser()
-    X_train, X_test, y_train, y_test = train_test_split(model.X,
-                                                        model.y,
-                                                        test_size=0.33,
-                                                        random_state=42)
-    X_train, X_val, y_train, y_val = train_test_split(X_train,
-                                                      y_train,
-                                                      test_size=0.05,
-                                                      random_state=24)
+    # X_train, X_test, y_train, y_test = train_test_split(model.X,
+    #                                                     model.y,
+    #                                                     test_size=0.10,
+    #                                                     random_state=42)
+    # X_train, X_val, y_train, y_val = train_test_split(X_train,
+    #                                                   y_train,
+    #                                                   test_size=0.05,
+    #                                                   random_state=24)
     # Convert data to PyTorch tensors
-    X_tensor_train = torch.from_numpy(X_train)
+    X_tensor_train = torch.from_numpy(model.X)
 
-    y_tensor_train = torch.from_numpy(y_train)  # Assuming y_data contains integers
+    y_tensor_train = torch.from_numpy(model.y)  # Assuming y_data contains integers
     # Create a TensorDataset
     dataset_train = TensorDataset(X_tensor_train, y_tensor_train)
 
-    # Create a DataLoader
-    data_loader_train = DataLoader(dataset_train, batch_size=FLAGS.batch_size, shuffle=True)
+    # # Create a DataLoader
+    # data_loader_train = DataLoader(dataset_train, batch_size=FLAGS.batch_size, shuffle=True)
     # Convert data to PyTorch tensors
-    X_tensor_val = torch.Tensor(X_val)
-    y_tensor_val = torch.Tensor(y_val)  # Assuming y_data contains integers
-    dataset_val = TensorDataset(X_tensor_val, y_tensor_val)
-    data_loader_val = DataLoader(dataset_val, batch_size=FLAGS.batch_size, shuffle=True)
+    # Assuming y_train is a NumPy array containing 0/1 labels
+    indices_y0 = np.where(model.y == 0)[0]
+    indices_y1 = np.where(model.y == 1)[0]
+    val_test_number = int(min(len(indices_y0), len(indices_y1)) * 0.2)
+
+    class_0_train = indices_y0[:-val_test_number]
+    class_1_train = indices_y1[:-val_test_number]
+    class_0_val = indices_y0[-val_test_number:-int(val_test_number / 2)]
+    class_1_val = indices_y1[-val_test_number:-int(val_test_number / 2)]
+    class_0_test = indices_y0[-int(val_test_number / 2):]
+    class_1_test = indices_y1[-int(val_test_number / 2):]
+
+    # Create subsets for y == 0 and y == 1
+    subset_y0 = Subset(dataset_train, class_0_train)
+    subset_y1 = Subset(dataset_train, class_1_train)
+    subset_y0_val = Subset(dataset_train, class_0_val)
+    subset_y1_val = Subset(dataset_train, class_1_val)
+    subset_y0_test = Subset(dataset_train, class_0_test)
+    subset_y1_test = Subset(dataset_train, class_1_test)
+
+    # Create DataLoaders for y == 0 and y == 1
+    data_loader_y0 = DataLoader(subset_y0, batch_size=FLAGS.batch_size, shuffle=True)
+    data_loader_y1 = DataLoader(subset_y1, batch_size=FLAGS.batch_size, shuffle=True)
+    val_loader_yo = DataLoader(subset_y0_val, batch_size=FLAGS.batch_size, shuffle=True)
+    val_loader_y1 = DataLoader(subset_y1_val, batch_size=FLAGS.batch_size, shuffle=True)
+    test_loader_y0 = DataLoader(subset_y0_test, batch_size=FLAGS.batch_size, shuffle=True)
+    test_loader_y1 = DataLoader(subset_y1_test, batch_size=FLAGS.batch_size, shuffle=True)
+
     train_model(model, FLAGS.num_epochs,
-                data_loader_train, data_loader_val)
-    X_tensor_test = torch.Tensor(X_test)
-    y_tensor_test = torch.Tensor(y_test)  # Assuming y_data contains integers
-    dataset_test = TensorDataset(X_tensor_test, y_tensor_test)
-    data_loader_test = DataLoader(dataset_test, batch_size=FLAGS.batch_size, shuffle=True)
-    test(data_loader_test, model.features_size, model.path_to_save)
+                data_loader_y0, data_loader_y1, val_loader_y1, val_loader_yo)
+    X_tensor_test = torch.Tensor(test_loader_y1, test_loader_y0)
+    # y_tensor_test = torch.Tensor(y_test)  # Assuming y_data contains integers
+    # dataset_test = TensorDataset(X_tensor_test, y_tensor_test)
+    # data_loader_test = DataLoader(dataset_test, batch_size=FLAGS.batch_size, shuffle=True)
+    # test(data_loader_test, model.path_to_save)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,30 @@ from sklearn.utils import resample
 
 
 def load_data_labels():
-    filter_preprocess_X()
+    # filter_preprocess_X()
+    outcomes = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\outcomes.pkl')
+    n_outcomes = outcomes.shape[1]
+    outcome_names = outcomes.columns
+    Y = outcomes.to_numpy()
+    dtd_indices = [0]  # [i for i, name in enumerate(outcome_names) if 'dtd' in name]
+    Y = Y[:, dtd_indices]
+    n_outcomes = len(dtd_indices)
+    outcome_names = outcome_names[dtd_indices]
+    # X_pd = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X.pkl')
+    X_pd = pd.read_csv(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X_filtered.csv')
+    X = X_pd.to_numpy()
+    scaler = StandardScaler()
+    # X = scaler.fit_transform(X) #Do not scale if using shap
+    Data = pd.read_csv(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\new_data_apr22.csv')
+    admission_date = pd.to_datetime(Data['Reference Event-Visit Start Date'])
+
+    X = X.astype('float32')
+    Y = Y.astype('int')
+    Y = Y.reshape(-1)
+    return X, Y, X_pd.columns.tolist(), len(X_pd.columns)
+
+def load_data_labels_cut():
+    # filter_preprocess_X()
     outcomes = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\outcomes.pkl')
     n_outcomes = outcomes.shape[1]
     outcome_names = outcomes.columns
@@ -47,6 +70,8 @@ def load_data_labels():
     count_label_0 = len(label_0_indices)
     count_label_1 = len(label_1_indices)
 
+
+
     # Balance the dataset by adjusting samples for each label
     if count_label_0 > count_label_1:
         # Select a random subset of label 0 indices to match label 1 count
@@ -62,10 +87,7 @@ def load_data_labels():
     # Update data and labels with the balanced dataset
     balanced_data = X[balanced_indices]
     balanced_labels = Y[balanced_indices]
-
     return balanced_data, balanced_labels, X_pd.columns.tolist(), len(X_pd.columns)
-
-
 def filter_preprocess_X():
     df = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X.pkl')
     # i want to group 3 clumns together by or sign
@@ -290,7 +312,7 @@ def diabetes_prob_actions():
 
 
 def prob_actions():
-    cost_list = np.array(np.ones(37))
+    cost_list = np.array(np.ones(32))
     return torch.from_numpy(np.array(cost_list))
 
 

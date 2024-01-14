@@ -16,7 +16,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 
 def decision_tree():
     # Splitting data into training and testing sets
-    X, y, _, number_of_features = utils.load_diabetes()
+    X, y, _, number_of_features = utils.load_data_labels()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     clf = DecisionTreeClassifier(random_state=42)  # You can specify hyperparameters here
     clf.fit(X_train, y_train)
@@ -37,6 +37,33 @@ def cut_decition_tree():
         accuracy = accuracy_score(y_test, y_pred)
         print(f"Accuracy: {accuracy}")
         print(f"Number of features: {max_features_to_use}")
+
+
+def cut_decision_tree_7():
+    X, y, _, number_of_features = utils.load_diabetes()
+    # Split the data into training and testing sets (80% train, 20% test)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Create a decision tree classifier with a maximum depth of 7 features
+    tree_classifier = DecisionTreeClassifier(max_depth=7)
+
+    # Train the decision tree classifier on the training data
+    tree_classifier.fit(X_train, y_train)
+
+    # Predict using the trained model on the test set
+    y_pred = tree_classifier.predict(X_test)
+
+    # Calculate accuracy
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"Accuracy of the decision tree model: {accuracy:.4f}")
+    cm = confusion_matrix(y_test, y_pred)
+    print("Confusion Matrix:")
+    print(cm)
+    # selected_samples = [0, 10, 20]  # Change these indices as needed
+    # for idx in selected_samples:
+    #     sample = X_test[idx].reshape(1, -1)
+    #     path = tree_classifier.decision_path(sample)
+    #     print(f"Path of sample {idx}: {path.indices}")
 
 
 def knn():
@@ -69,7 +96,7 @@ def SVM():
 
 
 def main():
-    SVM()
+    cut_decision_tree_7()
 
 
 if __name__ == "__main__":
