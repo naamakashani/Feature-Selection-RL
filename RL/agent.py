@@ -21,6 +21,7 @@ parser.add_argument("--min_lr",
 FLAGS = parser.parse_args(args=[])
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
 def lambda_rule(i_episode) -> float:
     """ stepwise learning rate calculator """
     exponent = int(np.floor((i_episode + 1) / FLAGS.decay_step_size))
@@ -31,7 +32,7 @@ class Agent(object):
     def __init__(self,
                  input_dim: int,
                  output_dim: int,
-                 hidden_dim: int,lr,weight_decay) -> None:
+                 hidden_dim: int, lr, weight_decay) -> None:
         """Agent class that choose action and train
         Args:
             input_dim (int): input dimension
@@ -78,7 +79,7 @@ class Agent(object):
         """
         if np.random.rand() < eps and mode == 'training':
             array_probs = env.action_probs * mask
-            #make the tensor numpy array
+            # make the tensor numpy array
             array_probs = array_probs.cpu().detach().numpy()
             return np.random.choice(self.output_dim, p=array_probs / array_probs.sum())
 
@@ -86,6 +87,28 @@ class Agent(object):
             self.dqn.train(mode=False)
             scores = self.get_Q(states)
             _, argmax = torch.max(scores.data * mask, 1)
+            return int(argmax.item())
+
+    def get_action_not_guess(self, states: np.ndarray, env,
+                             eps: float,
+                             mask: np.ndarray, mode) -> int:
+
+        if np.random.rand() < eps and mode == 'training':
+            array_probs = env.action_probs[:-1] * mask[:-1]
+            # make the tensor numpy array
+            array_probs = array_probs.cpu().detach().numpy()
+            return np.random.choice(self.output_dim - 1, p=array_probs / array_probs.sum())
+
+        else:
+            self.dqn.train(mode=False)
+            scores = self.get_Q(states)
+            _, argmax = torch.max(scores.data * mask, 1)
+
+            if argmax.item() == self.output_dim-1:
+                # choose the second highest value
+                scores.data[0][argmax.item()] = 0
+                _, argmax = torch.max(scores.data * mask, 1)
+
             return int(argmax.item())
 
     def get_Q(self, states: np.ndarray) -> torch.FloatTensor:
