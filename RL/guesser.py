@@ -83,6 +83,26 @@ def balance_class(X, y):
         y_balanced = y.copy()
     return X_balanced, y_balanced
 
+def create():
+    # Set a random seed for reproducibility
+
+    # Number of points to generate
+    num_points = 100
+
+    # Generate random x values
+    x1_values = np.random.uniform(low=0, high=30, size=num_points)
+
+    # Create y values based on the decision boundary y=-x with some random noise
+    x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
+
+    # Create labels based on the side of the decision boundary
+    labels = np.where(x2_values > -1 * x1_values , 1, 0)
+
+    # Create a scatter plot of the dataset with color-coded labels
+    plt.scatter(x1_values, x2_values, c=labels, cmap='viridis', marker='o', label='Data Points')
+    # Split the data into training and testing sets
+    x= np.column_stack((x1_values, x2_values))
+    return x, labels, x1_values, 2
 
 class Guesser(nn.Module):
     """
@@ -329,12 +349,15 @@ def save_model(model):
     os.rename(guesser_save_path + '~', guesser_save_path)
 
 
+
+
 def main():
     '''
     Train a neural network to guess the correct answer
     :return:
     '''
     model = Guesser()
+
     X_train, X_test, y_train, y_test = train_test_split(model.X,
                                                         model.y,
                                                         test_size=0.33,
@@ -363,6 +386,7 @@ def main():
     y_tensor_test = torch.Tensor(y_test)  # Assuming y_data contains integers
     dataset_test = TensorDataset(X_tensor_test, y_tensor_test)
     data_loader_test = DataLoader(dataset_test, batch_size=FLAGS.batch_size, shuffle=True)
+
     test(data_loader_test, model.path_to_save)
 
 

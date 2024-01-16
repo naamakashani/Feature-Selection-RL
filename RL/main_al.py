@@ -31,7 +31,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=30,
+                    default=40,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -71,7 +71,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=50,
+                    default=100,
                     help="Interval for calculating validation reward and saving model")
 parser.add_argument("--episode_length",
                     type=int,
@@ -149,34 +149,19 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done:
+    while not done and t < FLAGS.episode_length:
         a = agent.get_action(s, env, eps, mask, mode)
-        # a = agent.get_action_not_guess(s, env, eps, mask, mode)
-        s2, r, done, info = env.step(a, mask)
+        s, r, done, info = env.step(a, mask)
         mask[a] = 0
         total_reward += r
-        replay_memory.push(s, a, r, s2, done)
+        replay_memory.push(s, a, r, s, done)
         if len(replay_memory) > batch_size:
             if train_dqn:
                 minibatch = replay_memory.pop(batch_size)
                 train_helper(agent, minibatch, FLAGS.gamma)
                 agent.update_learning_rate()
 
-        s = s2
         t += 1
-        # check
-        if t == FLAGS.episode_length:
-            # a = agent.output_dim - 1
-            # s2, r, done, info = env.step(a, mask)
-            # mask[a] = 0
-            # total_reward += r
-            # replay_memory.push(s, a, r, s2, done)
-            break
-
-    # if train_dqn:
-    #     agent.update_learning_rate()
-
-    return total_reward, t
 
 
 def get_env_dim(env) -> Tuple[int, int]:
@@ -187,7 +172,7 @@ def get_env_dim(env) -> Tuple[int, int]:
         int: input_dim
         int: output_dim
     """
-    input_dim = 2 * env.guesser.features_size
+    input_dim = env.guesser.features_size
     output_dim = env.guesser.features_size + 1
 
     return input_dim, output_dim
@@ -297,7 +282,6 @@ def main():
     # define environment and agent (needed for main and test)
     env = myEnv(flags=FLAGS,
                 device=device)
-    clear_threshold = 1.
     input_dim, output_dim = get_env_dim(env)
     agent = Agent(input_dim,
                   output_dim,
@@ -312,35 +296,21 @@ def main():
 
     # counter of validation trials with no improvement, to determine when to stop training
     val_trials_without_improvement = 0
-    # rewards = deque(maxlen=100)
-    # steps = deque(maxlen=100)
     replay_memory = ReplayMemory(FLAGS.capacity)
     train_dqn = True
     train_guesser = False
-
-    for i in count(1):
-        # if i % (2 * FLAGS.ep_per_trainee) == FLAGS.ep_per_trainee:
-        #     train_dqn = False
-        #     train_guesser = True
-        # if i % (2 * FLAGS.ep_per_trainee) == 0:
-        #     train_dqn = True
-        #     train_guesser = False
-
-
-        # set exploration epsilon
+    i = 0
+    while val_trials_without_improvement < FLAGS.val_trials_wo_im:
         eps = epsilon_annealing(i, FLAGS.max_episode, FLAGS.min_eps)
-
         # play an episode
-        r, t = play_episode(env,
-                            agent,
-                            replay_memory,
-                            eps,
-                            FLAGS.batch_size,
-                            train_dqn=train_dqn,
-                            train_guesser=train_guesser, mode='training')
+        play_episode(env,
+                     agent,
+                     replay_memory,
+                     eps,
+                     FLAGS.batch_size,
+                     train_dqn=train_dqn,
+                     train_guesser=train_guesser, mode='training')
 
-        # rewards.append(r)
-        # steps.append(t)
         if i % FLAGS.val_interval == 0:
             # compute performance on validation set
             new_best_val_acc = val(i_episode=i,
@@ -354,18 +324,14 @@ def main():
             else:
                 val_trials_without_improvement += 1
 
-        if val_trials_without_improvement >= int(FLAGS.val_trials_wo_im):
-            break
-
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
+        i += 1
 
     test(env, agent, input_dim, output_dim)
     save_plot_acuuracy_epoch(val_list)
 
     show_sample_paths(6, env, agent)
-
-
 
 
 def val(i_episode: int,
@@ -375,27 +341,27 @@ def val(i_episode: int,
     print('Running validation')
     y_hat_val = np.zeros(len(env.y_val))
 
-    for i in range(len(env.X_val)):  # count(1)
+    for i in range(len(env.X_val)):
         state = env.reset(mode='val',
                           patient=i,
                           train_guesser=False)
         mask = env.reset_mask()
-
-        # run episode
-        for t in range(FLAGS.episode_length):
-
+        t = 0
+        done = False
+        while t < FLAGS.episode_length and not done:
             # select action from policy
-            action = agent.get_action(state, env, eps=0, mask=mask, mode='val')
-            mask[action] = 0
+            if t == 0:
+                action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
 
+            else:
+                action = agent.get_action(state, env, eps=0, mask=mask, mode='val')
+
+            mask[action] = 0
             # take the action
             state, reward, done, guess = env.step(action, mask, mode='val')
-
             if guess != -1:
                 y_hat_val[i] = guess
-
-            if done:
-                break
+            t += 1
 
         if guess == -1:
             a = agent.output_dim - 1
@@ -410,11 +376,7 @@ def val(i_episode: int,
         print('New best acc acheievd, saving best model')
         save_networks(i_episode, env, agent, acc)
         save_networks(i_episode='best', env=env, agent=agent)
-
-        return acc
-
-    else:
-        return best_val_acc
+    return acc
 
 
 def test(env, agent, input_dim, output_dim):
@@ -423,10 +385,7 @@ def test(env, agent, input_dim, output_dim):
 
     print('Loading best networks')
     env.guesser, agent.dqn = load_networks(i_episode='best', env=env, input_dim=input_dim, output_dim=output_dim)
-    # predict outcome on test data
     y_hat_test = np.zeros(len(env.y_test))
-    # y_hat_test_prob = np.zeros(len(env.y_test))
-
     print('Computing predictions of test data')
     n_test = len(env.X_test)
     for i in range(n_test):
@@ -435,22 +394,23 @@ def test(env, agent, input_dim, output_dim):
                           patient=i,
                           train_guesser=False)
         mask = env.reset_mask()
-
-        # run episode
-        for t in range(FLAGS.episode_length):
+        t = 0
+        done = False
+        while t < FLAGS.episode_length and not done:
             number_of_steps += 1
             # select action from policy
-            action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
+            if t == 0:
+                action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='test')
+            else:
+                action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
             mask[action] = 0
             # take the action
             state, reward, done, guess = env.step(action, mask, mode='test')
 
             if guess != -1:
                 y_hat_test[i] = env.guess
+            t += 1
 
-            # if done:
-            #     total_steps += number_of_steps
-            #     break
         if guess == -1:
             a = agent.output_dim - 1
             s2, r, done, info = env.step(a, mask)

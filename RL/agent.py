@@ -108,7 +108,6 @@ class Agent(object):
                 # choose the second highest value
                 scores.data[0][argmax.item()] = 0
                 _, argmax = torch.max(scores.data * mask, 1)
-
             return int(argmax.item())
 
     def get_Q(self, states: np.ndarray) -> torch.FloatTensor:

@@ -44,7 +44,7 @@ class myEnv(gymnasium.Env):
         self.guesser = Guesser()
         episode_length = flags.episode_length
         self.device = device
-        X, y = balance_class(self.guesser.X, self.guesser.y)
+        # X, y = balance_class(self.guesser.X, self.guesser.y)
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,
                                                                                 test_size=0.3)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
@@ -52,6 +52,7 @@ class myEnv(gymnasium.Env):
                                                                               test_size=0.05)
 
         self.episode_length = episode_length
+        # self.action_probs= utils.prob_rec()
         self.action_probs = utils.diabetes_prob_actions()
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
@@ -67,7 +68,7 @@ class myEnv(gymnasium.Env):
               mode='training',
               patient=0,
               train_guesser=True):
-        self.state = np.concatenate([np.zeros(self.guesser.features_size), np.zeros(self.guesser.features_size)])
+        self.state = np.concatenate([np.zeros(self.guesser.features_size)])
 
         if mode == 'training':
             self.patient = np.random.randint(self.X_train.shape[0])
@@ -82,7 +83,6 @@ class myEnv(gymnasium.Env):
         else:
             self.train_guesser = False
         return self.s
-
 
     def reset_mask(self):
         """ A method that resets the mask that is applied
@@ -127,7 +127,6 @@ class myEnv(gymnasium.Env):
                 next_state[action] = self.X_val[self.patient, action]
             elif mode == 'test':
                 next_state[action] = self.X_test[self.patient, action]
-            next_state[action + self.guesser.features_size] += 1.
             self.guess = -1
             self.done = False
 
@@ -158,21 +157,14 @@ class myEnv(gymnasium.Env):
         if mode == 'training':
             y_true = self.y_train[self.patient]
 
-        if self.train_guesser:
-            # y_pred=[]
-            # y = torch.Tensor(y_true).long()
-            # y_pred.append(y)
-            # labels = torch.Tensor(np.array(y_pred)).long()
-            # train guesser
-            self.guesser.optimizer.zero_grad()
-            # y = torch.Tensor(np.array(y_true))
-            # y = y.to(device=self.device)
-            self.guesser.train(mode=True)
-            y_true_tensor = torch.tensor([y_true]).float().long()
-            self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)
-            self.guesser.loss.backward()
-            self.guesser.optimizer.step()
-            # update learning rate
-            self.guesser.update_learning_rate()
+            if self.train_guesser:
+                self.guesser.optimizer.zero_grad()
+                self.guesser.train(mode=True)
+                y_true_tensor = torch.tensor([y_true]).float().long()
+                self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)
+                self.guesser.loss.backward()
+                self.guesser.optimizer.step()
+                # update learning rate
+                self.guesser.update_learning_rate()
 
         return reward

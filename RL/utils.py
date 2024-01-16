@@ -309,7 +309,9 @@ def load_diabetes():
 def diabetes_prob_actions():
     cost_list = np.array(np.ones(9))
     return torch.from_numpy(np.array(cost_list))
-
+def prob_rec():
+    cost_list = np.array(np.ones(3))
+    return torch.from_numpy(np.array(cost_list))
 
 def prob_actions():
     cost_list = np.array(np.ones(32))
