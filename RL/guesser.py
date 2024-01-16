@@ -23,7 +23,7 @@ parser.add_argument("--batch_size",
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=200,
+                    default=400,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
@@ -47,8 +47,12 @@ parser.add_argument("--val_interval",
                     help="Interval for calculating validation reward and saving model")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=30,
+                    default=60,
                     help="Number of validation trials without improvement")
+parser.add_argument("--episode_length",
+                    type=int,
+                    default=5,
+                    help="Episode length")
 
 FLAGS = parser.parse_args(args=[])
 
@@ -144,19 +148,22 @@ def mask(input: np.array) -> np.array:
     :param images: input
     :return: masked input
     '''
+
     # check if images has 1 dim
     if len(input.shape) == 1:
         for i in range(input.shape[0]):
+            fraction = 1-(FLAGS.episode_length / input.shape[0])
             # choose to mask in probability of 0.3
-            if (np.random.rand() < 0.3):
+            if (np.random.rand() < fraction):
                 input[i] = 0
         return input
     else:
 
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
+                fraction = 1-(FLAGS.episode_length / input[0].shape[0])
                 # choose to mask in probability of 0.3
-                if (np.random.rand() < 0.3):
+                if (np.random.rand() < fraction):
                     input[j][i] = 0
         return input
 
@@ -261,37 +268,38 @@ def train_model(model,
             model.optimizer.step()
         training_loss_list.append(running_loss / len(train_loader))
         print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
-        new_best_val_auc = val(model, val_loader, best_val_auc)
-        accuracy_list.append(new_best_val_auc)
-        if new_best_val_auc > best_val_auc:
-            best_val_auc = new_best_val_auc
-            val_trials_without_improvement = 0
-        else:
-            val_trials_without_improvement += 1
-        # check whether to stop training
-        if val_trials_without_improvement == FLAGS.val_trials_wo_im:
-            print('Did not achieve val AUC improvement for {} trials, training is done.'.format(
-                FLAGS.val_trials_wo_im))
-            break
+        if i % 2 == 0:
+            new_best_val_auc = val(model, val_loader, best_val_auc)
+            accuracy_list.append(new_best_val_auc)
+            if new_best_val_auc > best_val_auc:
+                best_val_auc = new_best_val_auc
+                val_trials_without_improvement = 0
+            else:
+                val_trials_without_improvement += 1
+            # check whether to stop training
+            if val_trials_without_improvement == FLAGS.val_trials_wo_im:
+                print('Did not achieve val AUC improvement for {} trials, training is done.'.format(
+                    FLAGS.val_trials_wo_im))
+                break
     save_plot_acuuracy_epoch(accuracy_list, training_loss_list)
 
 
 def save_plot_acuuracy_epoch(val_accuracy_list, training_loss_list):
-    epochs =  len(val_accuracy_list)
+    epochs_val = range(1, len(val_accuracy_list) + 1)
 
     plt.figure(figsize=(10, 5))
 
     # Plot Validation Accuracy
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, val_accuracy_list, marker='o', linestyle='-', color='b')
+    plt.plot(epochs_val, val_accuracy_list, marker='o', linestyle='-', color='b')
     plt.title('Validation Accuracy over Epochs')
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
     plt.grid(True)
-
+    epochs_train = range(1, len(training_loss_list) + 1)
     # Plot Training Loss
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, training_loss_list, marker='o', linestyle='-', color='r')
+    plt.plot(epochs_train, training_loss_list, marker='o', linestyle='-', color='r')
     plt.title('Training Loss over Epochs')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
