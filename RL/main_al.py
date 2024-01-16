@@ -319,12 +319,12 @@ def main():
     train_guesser = False
 
     for i in count(1):
-        if i % (2 * FLAGS.ep_per_trainee) == FLAGS.ep_per_trainee:
-            train_dqn = False
-            train_guesser = True
-        if i % (2 * FLAGS.ep_per_trainee) == 0:
-            train_dqn = True
-            train_guesser = False
+        # if i % (2 * FLAGS.ep_per_trainee) == FLAGS.ep_per_trainee:
+        #     train_dqn = False
+        #     train_guesser = True
+        # if i % (2 * FLAGS.ep_per_trainee) == 0:
+        #     train_dqn = True
+        #     train_guesser = False
 
 
         # set exploration epsilon
