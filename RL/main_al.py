@@ -31,11 +31,11 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=40,
+                    default=10,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
-                    default=1000,
+                    default=100000,
                     help="Switch between training dqn and guesser every this # of episodes")
 parser.add_argument("--batch_size",
                     type=int,
@@ -71,15 +71,15 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=100,
+                    default=10,
                     help="Interval for calculating validation reward and saving model")
 parser.add_argument("--episode_length",
                     type=int,
-                    default=5,
+                    default=10,
                     help="Episode length")
 parser.add_argument("--case",
                     type=int,
-                    default=2,
+                    default=5,
                     help="Which data to use")
 parser.add_argument("--env",
                     type=str,
@@ -278,107 +278,6 @@ def save_plot_acuuracy_epoch(accuracy_list):
     plt.show()
 
 
-def main():
-    # define environment and agent (needed for main and test)
-    env = myEnv(flags=FLAGS,
-                device=device)
-    input_dim, output_dim = get_env_dim(env)
-    agent = Agent(input_dim,
-                  output_dim,
-                  FLAGS.hidden_dim, FLAGS.lr, FLAGS.weight_decay)
-
-    agent.dqn.to(device=device)
-    env.guesser.to(device=device)
-
-    # store best result
-    best_val_acc = 0
-    val_list = []
-
-    # counter of validation trials with no improvement, to determine when to stop training
-    val_trials_without_improvement = 0
-    replay_memory = ReplayMemory(FLAGS.capacity)
-    train_dqn = True
-    train_guesser = False
-    i = 0
-    while val_trials_without_improvement < FLAGS.val_trials_wo_im:
-        eps = epsilon_annealing(i, FLAGS.max_episode, FLAGS.min_eps)
-        # play an episode
-        play_episode(env,
-                     agent,
-                     replay_memory,
-                     eps,
-                     FLAGS.batch_size,
-                     train_dqn=train_dqn,
-                     train_guesser=train_guesser, mode='training')
-
-        if i % FLAGS.val_interval == 0:
-            # compute performance on validation set
-            new_best_val_acc = val(i_episode=i,
-                                   best_val_acc=best_val_acc, env=env, agent=agent)
-            val_list.append(new_best_val_acc)
-
-            # update best result on validation set and counter
-            if new_best_val_acc > best_val_acc:
-                best_val_acc = new_best_val_acc
-                val_trials_without_improvement = 0
-            else:
-                val_trials_without_improvement += 1
-
-        if i % FLAGS.n_update_target_dqn == 0:
-            agent.update_target_dqn()
-        i += 1
-
-    test(env, agent, input_dim, output_dim)
-    save_plot_acuuracy_epoch(val_list)
-
-    show_sample_paths(6, env, agent)
-
-
-def val(i_episode: int,
-        best_val_acc: float, env, agent) -> float:
-    """ Compute performance on validation set and save current models """
-
-    print('Running validation')
-    y_hat_val = np.zeros(len(env.y_val))
-
-    for i in range(len(env.X_val)):
-        state = env.reset(mode='val',
-                          patient=i,
-                          train_guesser=False)
-        mask = env.reset_mask()
-        t = 0
-        done = False
-        while t < FLAGS.episode_length and not done:
-            # select action from policy
-            if t == 0:
-                action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
-
-            else:
-                action = agent.get_action(state, env, eps=0, mask=mask, mode='val')
-
-            mask[action] = 0
-            # take the action
-            state, reward, done, guess = env.step(action, mask, mode='val')
-            if guess != -1:
-                y_hat_val[i] = guess
-            t += 1
-
-        if guess == -1:
-            a = agent.output_dim - 1
-            s2, r, done, info = env.step(a, mask)
-            y_hat_val[i] = env.guess
-
-    confmat = confusion_matrix(env.y_val, y_hat_val)
-    acc = np.sum(np.diag(confmat)) / len(env.y_val)
-    print('Validation accuracy: {:1.3f}'.format(acc))
-
-    if acc >= best_val_acc:
-        print('New best acc acheievd, saving best model')
-        save_networks(i_episode, env, agent, acc)
-        save_networks(i_episode='best', env=env, agent=agent)
-    return acc
-
-
 def test(env, agent, input_dim, output_dim):
     total_steps = 0
     """ Computes performance nad test data """
@@ -482,6 +381,117 @@ def show_sample_paths(n_patients, env, agent):
                                                                                                             env.y_test[
                                                                                                                 idx]))
         print('Episode terminated\n')
+
+
+
+
+def main():
+    # define environment and agent (needed for main and test)
+    env = myEnv(flags=FLAGS,
+                device=device)
+    input_dim, output_dim = get_env_dim(env)
+    agent = Agent(input_dim,
+                  output_dim,
+                  FLAGS.hidden_dim, FLAGS.lr, FLAGS.weight_decay)
+
+    agent.dqn.to(device=device)
+    env.guesser.to(device=device)
+
+    # store best result
+    best_val_acc = 0
+    val_list = []
+
+    # counter of validation trials with no improvement, to determine when to stop training
+    val_trials_without_improvement = 0
+    replay_memory = ReplayMemory(FLAGS.capacity)
+    train_dqn = True
+    train_guesser = False
+    i = 0
+    while val_trials_without_improvement < FLAGS.val_trials_wo_im:
+        # if i % (2 * FLAGS.ep_per_trainee) == 0:
+        #     train_dqn = False
+        #     train_guesser = True
+        # if i % (2 * FLAGS.ep_per_trainee) == FLAGS.ep_per_trainee:
+        #     train_dqn = True
+        #     train_guesser = False
+
+        eps = epsilon_annealing(i, FLAGS.max_episode, FLAGS.min_eps)
+        # play an episode
+        play_episode(env,
+                     agent,
+                     replay_memory,
+                     eps,
+                     FLAGS.batch_size,
+                     train_dqn=train_dqn,
+                     train_guesser=train_guesser, mode='training')
+
+        if i % FLAGS.val_interval == 0:
+            # compute performance on validation set
+            new_best_val_acc = val(i_episode=i,
+                                   best_val_acc=best_val_acc, env=env, agent=agent)
+            val_list.append(new_best_val_acc)
+
+            # update best result on validation set and counter
+            if new_best_val_acc > best_val_acc:
+                best_val_acc = new_best_val_acc
+                val_trials_without_improvement = 0
+            else:
+                val_trials_without_improvement += 1
+
+        if i % FLAGS.n_update_target_dqn == 0:
+            agent.update_target_dqn()
+        i += 1
+
+    test(env, agent, input_dim, output_dim)
+    save_plot_acuuracy_epoch(val_list)
+
+    show_sample_paths(6, env, agent)
+
+
+def val(i_episode: int,
+        best_val_acc: float, env, agent) -> float:
+    """ Compute performance on validation set and save current models """
+
+    print('Running validation')
+    y_hat_val = np.zeros(len(env.y_val))
+
+    for i in range(len(env.X_val)):
+        state = env.reset(mode='val',
+                          patient=i,
+                          train_guesser=False)
+        mask = env.reset_mask()
+        t = 0
+        done = False
+        while t < FLAGS.episode_length and not done:
+            # select action from policy
+            if t == 0:
+                action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
+
+            else:
+                action = agent.get_action(state, env, eps=0, mask=mask, mode='val')
+
+            mask[action] = 0
+            # take the action
+            state, reward, done, guess = env.step(action, mask, mode='val')
+            if guess != -1:
+                y_hat_val[i] = guess
+            t += 1
+
+        if guess == -1:
+            a = agent.output_dim - 1
+            s2, r, done, info = env.step(a, mask)
+            y_hat_val[i] = env.guess
+
+    confmat = confusion_matrix(env.y_val, y_hat_val)
+    acc = np.sum(np.diag(confmat)) / len(env.y_val)
+    print('Validation accuracy: {:1.3f}'.format(acc))
+
+    if acc >= best_val_acc:
+        print('New best acc acheievd, saving best model')
+        save_networks(i_episode, env, agent, acc)
+        save_networks(i_episode='best', env=env, agent=agent)
+    return acc
+
 
 
 if __name__ == '__main__':

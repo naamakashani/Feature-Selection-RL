@@ -5,6 +5,7 @@ import gymnasium
 import torch
 import RL.utils as utils
 from RL.guesser import Guesser
+import torch.nn.functional as F
 
 
 def balance_class(X, y):
@@ -52,8 +53,8 @@ class myEnv(gymnasium.Env):
                                                                               test_size=0.05)
 
         self.episode_length = episode_length
-        # self.action_probs= utils.prob_rec()
-        self.action_probs = utils.diabetes_prob_actions()
+        cost_list = np.array(np.ones(self.guesser.features_size + 1))
+        self.action_probs = torch.from_numpy(np.array(cost_list))
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
             save_dir = os.path.join(os.getcwd(), 'model_guesser')
@@ -117,18 +118,36 @@ class myEnv(gymnasium.Env):
     def terminate_episode(self):
         self.done = True
 
+
+
     def update_state(self, action, mode, mask):
-        next_state = np.array(self.state)
+        prev_state = np.array(self.state)
+        guesser_input = torch.Tensor(
+            prev_state[:self.guesser.features_size])
+        if torch.cuda.is_available():
+            guesser_input = guesser_input.cuda()
+        self.guesser.train(mode=False)
+        probs = self.guesser(guesser_input)
+        reward_last_state = probs[self.y_train[self.patient]].item()
 
         if action < self.guesser.features_size:  # Not making a guess
             if mode == 'training':
-                next_state[action] = self.X_train[self.patient, action]
+                prev_state[action] = self.X_train[self.patient, action]
             elif mode == 'val':
-                next_state[action] = self.X_val[self.patient, action]
+                prev_state[action] = self.X_val[self.patient, action]
             elif mode == 'test':
-                next_state[action] = self.X_test[self.patient, action]
+                prev_state[action] = self.X_test[self.patient, action]
             self.guess = -1
             self.done = False
+            guesser_input = torch.Tensor(
+                prev_state[:self.guesser.features_size])
+            if torch.cuda.is_available():
+                guesser_input = guesser_input.cuda()
+            self.guesser.train(mode=False)
+            probs = self.guesser(guesser_input)
+            reward_next_state = probs[self.y_train[self.patient]].item()
+            self.reward=reward_next_state-reward_last_state
+
 
         else:  # Making a guess
             guesser_input = torch.Tensor(
@@ -141,7 +160,7 @@ class myEnv(gymnasium.Env):
             self.correct_prob = self.probs[self.y_train[self.patient]].item()
             self.terminate_episode()
 
-        return next_state
+        return prev_state
 
     def compute_reward(self, mode):
         """ Compute the reward """
@@ -150,7 +169,11 @@ class myEnv(gymnasium.Env):
             return None
 
         if self.guess == -1:  # no guess was made
-            return .01 * np.random.rand()
+            return self.reward
+            # return .01 * np.random.rand()
+
+
+
         else:
             reward = self.correct_prob
 
@@ -160,11 +183,12 @@ class myEnv(gymnasium.Env):
             if self.train_guesser:
                 self.guesser.optimizer.zero_grad()
                 self.guesser.train(mode=True)
-                y_true_tensor = torch.tensor([y_true]).float().long()
+                y_tensor = torch.tensor([int(y_true)])
+                y_true_tensor = F.one_hot(y_tensor, num_classes=2).squeeze()
+                self.probs = self.probs.float()
+                y_true_tensor = y_true_tensor.float()
                 self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)
                 self.guesser.loss.backward()
                 self.guesser.optimizer.step()
-                # update learning rate
-                self.guesser.update_learning_rate()
 
         return reward

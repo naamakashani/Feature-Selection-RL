@@ -23,7 +23,7 @@ parser.add_argument("--batch_size",
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=400,
+                    default=100,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
@@ -47,17 +47,33 @@ parser.add_argument("--val_interval",
                     help="Interval for calculating validation reward and saving model")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=60,
+                    default=50,
                     help="Number of validation trials without improvement")
 parser.add_argument("--episode_length",
                     type=int,
-                    default=5,
+                    default=15,
                     help="Episode length")
 
 FLAGS = parser.parse_args(args=[])
 
 
-def balance_class(X, y):
+def add_noise(X, noise_std=0.01):
+    """
+    Add Gaussian noise to the input features.
+
+    Parameters:
+    - X: Input features (numpy array).
+    - noise_std: Standard deviation of the Gaussian noise.
+
+    Returns:
+    - X_noisy: Input features with added noise.
+    """
+    noise = np.random.normal(loc=0, scale=noise_std, size=X.shape)
+    X_noisy = X + noise
+    return X_noisy
+
+
+def balance_class(X, y, noise_std=0.01):
     unique_classes, class_counts = np.unique(y, return_counts=True)
     minority_class = unique_classes[np.argmin(class_counts)]
     majority_class = unique_classes[np.argmax(class_counts)]
@@ -71,17 +87,18 @@ def balance_class(X, y):
     majority_count = len(majority_indices)
     count_diff = majority_count - minority_count
 
-    # Duplicate samples from the minority class to balance the dataset
+    # Add noise to the features of the minority class to balance the dataset
     if count_diff > 0:
-        # Randomly sample indices from the minority class to duplicate
-        duplicated_indices = np.random.choice(minority_indices, count_diff, replace=True)
-        # Concatenate the duplicated samples to the original arrays
-        X_balanced = np.concatenate([X, X[duplicated_indices]], axis=0)
-        y_balanced = np.concatenate([y, y[duplicated_indices]], axis=0)
+        # Randomly sample indices from the minority class to add noise
+        noisy_indices = np.random.choice(minority_indices, count_diff, replace=True)
+        # Add noise to the features of the selected samples
+        X_balanced = np.concatenate([X, add_noise(X[noisy_indices], noise_std)], axis=0)
+        y_balanced = np.concatenate([y, y[noisy_indices]], axis=0)
     else:
         X_balanced = X.copy()  # No need for balancing, as classes are already balanced
         y_balanced = y.copy()
     return X_balanced, y_balanced
+
 
 def create():
     # Set a random seed for reproducibility
@@ -96,13 +113,14 @@ def create():
     x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
 
     # Create labels based on the side of the decision boundary
-    labels = np.where(x2_values > -1 * x1_values , 1, 0)
+    labels = np.where(x2_values > -1 * x1_values, 1, 0)
 
     # Create a scatter plot of the dataset with color-coded labels
     plt.scatter(x1_values, x2_values, c=labels, cmap='viridis', marker='o', label='Data Points')
     # Split the data into training and testing sets
-    x= np.column_stack((x1_values, x2_values))
+    x = np.column_stack((x1_values, x2_values))
     return x, labels, x1_values, 2
+
 
 class Guesser(nn.Module):
     """
@@ -114,8 +132,8 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
-        # self.X, self.y = balance_class(self.X, self.y)
+        self.X, self.y, self.question_names, self.features_size = utils.load_gisetta()
+        self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
             torch.nn.PReLU(),
@@ -169,10 +187,11 @@ def mask(input: np.array) -> np.array:
     :return: masked input
     '''
 
+
     # check if images has 1 dim
     if len(input.shape) == 1:
         for i in range(input.shape[0]):
-            fraction = 1-(FLAGS.episode_length / input.shape[0])
+            fraction = 0.3
             # choose to mask in probability of 0.3
             if (np.random.rand() < fraction):
                 input[i] = 0
@@ -181,7 +200,7 @@ def mask(input: np.array) -> np.array:
 
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
-                fraction = 1-(FLAGS.episode_length / input[0].shape[0])
+                fraction = 0.3
                 # choose to mask in probability of 0.3
                 if (np.random.rand() < fraction):
                     input[j][i] = 0
@@ -265,7 +284,6 @@ def train_model(model,
     val_trials_without_improvement = 0
     best_val_auc = 0
     # count total sampels in trainloaser
-    total_samples = len(train_loader.dataset)
     accuracy_list = []
     training_loss_list = []
     for i in range(1, nepochs):
@@ -286,6 +304,7 @@ def train_model(model,
             running_loss += loss.item()
             loss.backward()
             model.optimizer.step()
+
         training_loss_list.append(running_loss / len(train_loader))
         print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
         if i % 2 == 0:
@@ -347,8 +366,6 @@ def save_model(model):
         os.remove(guesser_save_path)
     torch.save(model.cpu().state_dict(), guesser_save_path + '~')
     os.rename(guesser_save_path + '~', guesser_save_path)
-
-
 
 
 def main():

@@ -41,6 +41,7 @@ def load_data_labels():
     Y = Y.reshape(-1)
     return X, Y, X_pd.columns.tolist(), len(X_pd.columns)
 
+
 def load_data_labels_cut():
     # filter_preprocess_X()
     outcomes = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\outcomes.pkl')
@@ -70,8 +71,6 @@ def load_data_labels_cut():
     count_label_0 = len(label_0_indices)
     count_label_1 = len(label_1_indices)
 
-
-
     # Balance the dataset by adjusting samples for each label
     if count_label_0 > count_label_1:
         # Select a random subset of label 0 indices to match label 1 count
@@ -88,6 +87,8 @@ def load_data_labels_cut():
     balanced_data = X[balanced_indices]
     balanced_labels = Y[balanced_indices]
     return balanced_data, balanced_labels, X_pd.columns.tolist(), len(X_pd.columns)
+
+
 def filter_preprocess_X():
     df = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\codeChoice\data_rl\preprocessed_X.pkl')
     # i want to group 3 clumns together by or sign
@@ -171,6 +172,60 @@ def load_heart():
     class_names = [0, 1]
     print('loaded data,  {} rows, {} columns'.format(n, d))
     return X, y, question_names, len(columns_without_label)
+
+
+def load_sanity():
+    data = []
+    labels = []
+    file_path = 'C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\data.csv'
+    # Open the CSV file
+    with open(file_path, newline='') as csvfile:
+        # Create a CSV reader
+        csv_reader = csv.reader(csvfile)
+        for line in csv_reader:
+            columns = line
+            columns_without_label = columns[0:-1]
+            for i in range(len(columns_without_label)):
+                columns_without_label[i] = float(columns_without_label[i])
+            data.append(columns_without_label)
+            labels.append(int(float((columns[-1]))))
+
+    # convet to float each element
+
+    # Convert zero_list to a NumPy array
+    X = np.array(data)
+    y = np.array(labels)
+
+    n, d = X.shape
+    class_names = [0, 1]
+    print('loaded data,  {} rows, {} columns'.format(n, d))
+    return X, y, y, len(columns_without_label)
+
+
+def load_gisetta():
+    data_path = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\gisette\\gisette_train.data"
+    labels_path = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\gisette\\gisette_train.labels"
+    data = []
+    labels = []
+    with open(labels_path, newline='') as file:
+        # read line by line
+        for line in file:
+            if int(line) == -1:
+                labels.append(0)
+            else:
+                labels.append(1)
+    with open(data_path, 'r') as file:
+        csv_reader = csv.reader(file)
+        for row in csv_reader:
+            sample = []
+            columns = row[0].split(' ')
+            for i in range(len(columns)-2):
+                sample.append(float(columns[i]))
+            data.append(sample)
+    X = np.array(data)
+    y = np.array(labels)
+    return X, y, y, len(sample)
+
 
 
 def load_chron():
@@ -309,9 +364,12 @@ def load_diabetes():
 def diabetes_prob_actions():
     cost_list = np.array(np.ones(9))
     return torch.from_numpy(np.array(cost_list))
+
+
 def prob_rec():
     cost_list = np.array(np.ones(3))
     return torch.from_numpy(np.array(cost_list))
+
 
 def prob_actions():
     cost_list = np.array(np.ones(32))

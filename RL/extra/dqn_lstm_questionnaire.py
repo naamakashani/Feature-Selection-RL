@@ -426,7 +426,7 @@ def epsilon_annealing(episode: int, max_episode: int, min_eps: float) -> float:
     slope = (min_eps - 1.0) / max_episode
     return max(slope * episode + 1.0, min_eps)
 
-
+os.chdir("C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL")
 # define envurinment and agent (needed for main and test)
 env = Questionnaire_env(flags=FLAGS,
                         device=device)
