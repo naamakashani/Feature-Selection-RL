@@ -18,7 +18,7 @@ def decision_tree():
     # Splitting data into training and testing sets
     X, y, _, number_of_features = utils.load_data_labels()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    clf = DecisionTreeClassifier(random_state=42)  # You can specify hyperparameters here
+    clf = DecisionTreeClassifier(max_depth=10)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
@@ -27,16 +27,14 @@ def decision_tree():
 
 
 def cut_decition_tree():
-    X, y, _, number_of_features = utils.load_diabetes()
+    X, y, _, number_of_features = utils.load_gisetta()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    for i in range(1, number_of_features):
-        max_features_to_use = i
-        clf = DecisionTreeClassifier(max_features=max_features_to_use, random_state=42)  # For classification tasks
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_test)
-        accuracy = accuracy_score(y_test, y_pred)
-        print(f"Accuracy: {accuracy}")
-        print(f"Number of features: {max_features_to_use}")
+    clf = DecisionTreeClassifier(max_depth=10)  # You can specify hyperparameters here
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"Accuracy: {accuracy}")
+    print(f"Number of features: {number_of_features}")
 
 
 def cut_decision_tree_7():
@@ -96,7 +94,7 @@ def SVM():
 
 
 def main():
-    cut_decision_tree_7()
+    cut_decition_tree()
 
 
 if __name__ == "__main__":

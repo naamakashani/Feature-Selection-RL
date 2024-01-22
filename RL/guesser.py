@@ -23,7 +23,7 @@ parser.add_argument("--batch_size",
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=100,
+                    default=200,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
@@ -41,18 +41,11 @@ parser.add_argument("--weight_decay",
                     type=float,
                     default=0.001,
                     help="l_2 weight penalty")
-parser.add_argument("--val_interval",
-                    type=int,
-                    default=60,
-                    help="Interval for calculating validation reward and saving model")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
                     default=50,
                     help="Number of validation trials without improvement")
-parser.add_argument("--episode_length",
-                    type=int,
-                    default=15,
-                    help="Episode length")
+
 
 FLAGS = parser.parse_args(args=[])
 
@@ -132,7 +125,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_gisetta()
+        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
         self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
@@ -191,7 +184,7 @@ def mask(input: np.array) -> np.array:
     # check if images has 1 dim
     if len(input.shape) == 1:
         for i in range(input.shape[0]):
-            fraction = 0.3
+            fraction = 0.5
             # choose to mask in probability of 0.3
             if (np.random.rand() < fraction):
                 input[i] = 0
@@ -200,7 +193,7 @@ def mask(input: np.array) -> np.array:
 
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
-                fraction = 0.3
+                fraction = 0.5
                 # choose to mask in probability of 0.3
                 if (np.random.rand() < fraction):
                     input[j][i] = 0

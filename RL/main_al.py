@@ -31,7 +31,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=10,
+                    default=50,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -71,12 +71,8 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=10,
+                    default=50,
                     help="Interval for calculating validation reward and saving model")
-parser.add_argument("--episode_length",
-                    type=int,
-                    default=10,
-                    help="Episode length")
 parser.add_argument("--case",
                     type=int,
                     default=5,
@@ -149,9 +145,11 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < FLAGS.episode_length:
+    while not done and t < agent.input_dim / 2:
         a = agent.get_action(s, env, eps, mask, mode)
         s, r, done, info = env.step(a, mask)
+        # if r < 0:
+        # done = True
         mask[a] = 0
         total_reward += r
         replay_memory.push(s, a, r, s, done)
@@ -295,7 +293,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < FLAGS.episode_length and not done:
+        while t < agent.input_dim / 2 and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -346,7 +344,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(FLAGS.episode_length):
+        for t in range(int(agent.input_dim / 2)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -381,8 +379,6 @@ def show_sample_paths(n_patients, env, agent):
                                                                                                             env.y_test[
                                                                                                                 idx]))
         print('Episode terminated\n')
-
-
 
 
 def main():
@@ -462,7 +458,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < FLAGS.episode_length and not done:
+        while t < agent.input_dim / 2 and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
@@ -491,7 +487,6 @@ def val(i_episode: int,
         save_networks(i_episode, env, agent, acc)
         save_networks(i_episode='best', env=env, agent=agent)
     return acc
-
 
 
 if __name__ == '__main__':
