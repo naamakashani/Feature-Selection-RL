@@ -184,7 +184,7 @@ def mask(input: np.array) -> np.array:
     # check if images has 1 dim
     if len(input.shape) == 1:
         for i in range(input.shape[0]):
-            fraction = 0.5
+            fraction = 0.3
             # choose to mask in probability of 0.3
             if (np.random.rand() < fraction):
                 input[i] = 0
@@ -193,7 +193,7 @@ def mask(input: np.array) -> np.array:
 
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
-                fraction = 0.5
+                fraction = 0.3
                 # choose to mask in probability of 0.3
                 if (np.random.rand() < fraction):
                     input[j][i] = 0
