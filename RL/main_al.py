@@ -7,6 +7,7 @@ from env import *
 from agent import *
 from ReplayMemory import *
 from itertools import count
+from PrioritiziedReplayMemory import *
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--save_dir",
@@ -132,9 +133,24 @@ def train_helper(agent: Agent,
     return agent.train(Q_predict, Q_target)
 
 
+def calculate_td_error(state, action, reward, next_state, done, agent, gamma):
+    # Current Q-value estimate
+    current_q_value = agent.get_Q(state).squeeze()[action]
+    if done:
+        target_q_value = reward
+    else:
+        next_q_values = agent.get_target_Q(next_state).squeeze()
+        max_next_q_value = max(next_q_values)
+        target_q_value = reward + gamma * max_next_q_value
+
+    # TD error
+    td_error = target_q_value - current_q_value
+    return td_error
+
+
 def play_episode(env,
                  agent: Agent,
-                 replay_memory: ReplayMemory,
+                 replay_memory: ReplayMemory, priorityRM: PrioritizedReplayMemory,
                  eps: float,
                  batch_size: int,
                  train_guesser=True,
@@ -149,6 +165,7 @@ def play_episode(env,
     Returns:
         int: reward earned in this episode
     """
+
     s = env.reset(train_guesser=train_guesser)
     done = False
     total_reward = 0
@@ -156,17 +173,31 @@ def play_episode(env,
     t = 0
     while not done and t < agent.input_dim / 2:
         a = agent.get_action(s, env, eps, mask, mode)
-        s, r, done, info = env.step(a, mask)
+        next_state, r, done, info = env.step(a, mask)
         # if r < 0:
         # done = True
         mask[a] = 0
         total_reward += r
-        replay_memory.push(s, a, r, s, done)
+        td = calculate_td_error(s, a, r, next_state, done, agent, FLAGS.gamma)
+        # priorityRM.push(s, a, r, next_state, done, td)
+
+        replay_memory.push(s, a, r, next_state, done)
         if len(replay_memory) > batch_size:
             if train_dqn:
                 minibatch = replay_memory.pop(batch_size)
                 train_helper(agent, minibatch, FLAGS.gamma)
                 agent.update_learning_rate()
+        # if len(priorityRM) > batch_size:
+        #     if train_dqn:
+        #         minibatch, indices, weights  = priorityRM.pop(batch_size)
+        #         td_errors=[]
+        #         for transition, weight in zip(minibatch, weights):
+        #             state, action, reward, next_state, done = transition
+        #             td_error = calculate_td_error(state, action, reward, next_state, done, agent, FLAGS.gamma)
+        #             td_errors.append(td_error)
+        #         priorityRM.update_priorities(indices, td_errors)
+        #         train_helper(agent, minibatch, FLAGS.gamma)
+        #         agent.update_learning_rate()
 
         t += 1
 
@@ -184,6 +215,7 @@ def get_env_dim(env) -> Tuple[int, int]:
 
     return input_dim, output_dim
 
+
 def epsilon_annealing(initial_epsilon, min_epsilon, anneal_steps, current_step):
     """
     Epsilon annealing function for epsilon-greedy exploration in reinforcement learning.
@@ -199,6 +231,7 @@ def epsilon_annealing(initial_epsilon, min_epsilon, anneal_steps, current_step):
     """
     epsilon = max(min_epsilon, initial_epsilon - (initial_epsilon - min_epsilon) * current_step / anneal_steps)
     return epsilon
+
 
 # def epsilon_annealing(episode: int, max_episode: int, min_eps: float) -> float:
 #     """Returns 𝜺-greedy
@@ -405,8 +438,6 @@ def show_sample_paths(n_patients, env, agent):
         print('Episode terminated\n')
 
 
-
-
 def val(i_episode: int,
         best_val_acc: float, env, agent) -> float:
     """ Compute performance on validation set and save current models """
@@ -451,6 +482,7 @@ def val(i_episode: int,
         save_networks(i_episode='best', env=env, agent=agent)
     return acc
 
+
 def main():
     # define environment and agent (needed for main and test)
     env = myEnv(flags=FLAGS,
@@ -470,6 +502,7 @@ def main():
     # counter of validation trials with no improvement, to determine when to stop training
     val_trials_without_improvement = 0
     replay_memory = ReplayMemory(FLAGS.capacity)
+    priorityRP = PrioritizedReplayMemory(FLAGS.capacity)
     train_dqn = True
     train_guesser = False
     i = 0
@@ -485,7 +518,7 @@ def main():
         # play an episode
         play_episode(env,
                      agent,
-                     replay_memory,
+                     replay_memory, priorityRP,
                      eps,
                      FLAGS.batch_size,
                      train_dqn=train_dqn,
@@ -512,6 +545,7 @@ def main():
     save_plot_acuuracy_epoch(val_list)
 
     show_sample_paths(6, env, agent)
+
 
 if __name__ == '__main__':
     os.chdir(FLAGS.directory)
