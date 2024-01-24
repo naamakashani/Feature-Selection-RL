@@ -23,7 +23,7 @@ parser.add_argument("--directory",
                     help="Directory for saved models")
 parser.add_argument("--gamma",
                     type=float,
-                    default=0.85,
+                    default=0.9,
                     help="Discount rate for Q_target")
 parser.add_argument("--n_update_target_dqn",
                     type=int,
@@ -47,16 +47,25 @@ parser.add_argument("--hidden-dim",
                     help="Hidden dimension")
 parser.add_argument("--capacity",
                     type=int,
-                    default=10000,
+                    default=1000000,
                     help="Replay memory capacity")
 parser.add_argument("--max-episode",
                     type=int,
                     default=2000,
                     help="e-Greedy target episode (eps will be the lowest at this episode)")
-parser.add_argument("--min-eps",
+parser.add_argument("--min_epsilon",
                     type=float,
                     default=0.01,
                     help="Min epsilon")
+parser.add_argument("--initial_epsilon",
+                    type=float,
+                    default=1,
+                    help="Max epsilon")
+parser.add_argument("--anneal_steps",
+                    type=float,
+                    default=1000,
+                    help="anneal_steps")
+
 parser.add_argument("--lr",
                     type=float,
                     default=1e-4,
@@ -73,23 +82,23 @@ parser.add_argument("--val_interval",
                     type=int,
                     default=50,
                     help="Interval for calculating validation reward and saving model")
-parser.add_argument("--case",
-                    type=int,
-                    default=5,
-                    help="Which data to use")
-parser.add_argument("--env",
-                    type=str,
-                    default="Questionnaire",
-                    help="environment name: Questionnaire")
+# parser.add_argument("--case",
+#                     type=int,
+#                     default=5,
+#                     help="Which data to use")
+# parser.add_argument("--env",
+#                     type=str,
+#                     default="Questionnaire",
+#                     help="environment name: Questionnaire")
 # Environment params
-parser.add_argument("--g_hidden-dim",
-                    type=int,
-                    default=256,
-                    help="Guesser hidden dimension")
-parser.add_argument("--g_weight_decay",
-                    type=float,
-                    default=0e-4,
-                    help="Guesser l_2 weight penalty")
+# parser.add_argument("--g_hidden-dim",
+#                     type=int,
+#                     default=256,
+#                     help="Guesser hidden dimension")
+# parser.add_argument("--g_weight_decay",
+#                     type=float,
+#                     default=0e-4,
+#                     help="Guesser l_2 weight penalty")
 
 FLAGS = parser.parse_args(args=[])
 
@@ -175,25 +184,40 @@ def get_env_dim(env) -> Tuple[int, int]:
 
     return input_dim, output_dim
 
-
-def epsilon_annealing(episode: int, max_episode: int, min_eps: float) -> float:
-    """Returns 𝜺-greedy
-    1.0---|\
-          | \
-          |  \
-    min_e +---+------->
-              |
-              max_episode
-    Args:
-        epsiode (int): Current episode (0<= episode)
-        max_episode (int): After max episode, 𝜺 will be `min_eps`
-        min_eps (float): 𝜺 will never go below this value
-    Returns:
-        float: 𝜺 value
+def epsilon_annealing(initial_epsilon, min_epsilon, anneal_steps, current_step):
     """
+    Epsilon annealing function for epsilon-greedy exploration in reinforcement learning.
 
-    slope = (min_eps - 1.0) / max_episode
-    return max(slope * episode + 1.0, min_eps)
+    Parameters:
+    - initial_epsilon: Initial exploration rate
+    - min_epsilon: Minimum exploration rate
+    - anneal_steps: Number of steps over which to anneal epsilon
+    - current_step: Current step in the learning process
+
+    Returns:
+    - epsilon: Annealed exploration rate for the current step
+    """
+    epsilon = max(min_epsilon, initial_epsilon - (initial_epsilon - min_epsilon) * current_step / anneal_steps)
+    return epsilon
+
+# def epsilon_annealing(episode: int, max_episode: int, min_eps: float) -> float:
+#     """Returns 𝜺-greedy
+#     1.0---|\
+#           | \
+#           |  \
+#     min_e +---+------->
+#               |
+#               max_episode
+#     Args:
+#         epsiode (int): Current episode (0<= episode)
+#         max_episode (int): After max episode, 𝜺 will be `min_eps`
+#         min_eps (float): 𝜺 will never go below this value
+#     Returns:
+#         float: 𝜺 value
+#     """
+#
+#     slope = (min_eps - 1.0) / max_episode
+#     return max(slope * episode + 1.0, min_eps)
 
 
 def save_networks(i_episode: int, env, agent,
@@ -381,67 +405,6 @@ def show_sample_paths(n_patients, env, agent):
         print('Episode terminated\n')
 
 
-def main():
-    # define environment and agent (needed for main and test)
-    env = myEnv(flags=FLAGS,
-                device=device)
-    input_dim, output_dim = get_env_dim(env)
-    agent = Agent(input_dim,
-                  output_dim,
-                  FLAGS.hidden_dim, FLAGS.lr, FLAGS.weight_decay)
-
-    agent.dqn.to(device=device)
-    env.guesser.to(device=device)
-
-    # store best result
-    best_val_acc = 0
-    val_list = []
-
-    # counter of validation trials with no improvement, to determine when to stop training
-    val_trials_without_improvement = 0
-    replay_memory = ReplayMemory(FLAGS.capacity)
-    train_dqn = True
-    train_guesser = False
-    i = 0
-    while val_trials_without_improvement < FLAGS.val_trials_wo_im:
-        # if i % (2 * FLAGS.ep_per_trainee) == 0:
-        #     train_dqn = False
-        #     train_guesser = True
-        # if i % (2 * FLAGS.ep_per_trainee) == FLAGS.ep_per_trainee:
-        #     train_dqn = True
-        #     train_guesser = False
-
-        eps = epsilon_annealing(i, FLAGS.max_episode, FLAGS.min_eps)
-        # play an episode
-        play_episode(env,
-                     agent,
-                     replay_memory,
-                     eps,
-                     FLAGS.batch_size,
-                     train_dqn=train_dqn,
-                     train_guesser=train_guesser, mode='training')
-
-        if i % FLAGS.val_interval == 0:
-            # compute performance on validation set
-            new_best_val_acc = val(i_episode=i,
-                                   best_val_acc=best_val_acc, env=env, agent=agent)
-            val_list.append(new_best_val_acc)
-
-            # update best result on validation set and counter
-            if new_best_val_acc > best_val_acc:
-                best_val_acc = new_best_val_acc
-                val_trials_without_improvement = 0
-            else:
-                val_trials_without_improvement += 1
-
-        if i % FLAGS.n_update_target_dqn == 0:
-            agent.update_target_dqn()
-        i += 1
-
-    test(env, agent, input_dim, output_dim)
-    save_plot_acuuracy_epoch(val_list)
-
-    show_sample_paths(6, env, agent)
 
 
 def val(i_episode: int,
@@ -488,6 +451,67 @@ def val(i_episode: int,
         save_networks(i_episode='best', env=env, agent=agent)
     return acc
 
+def main():
+    # define environment and agent (needed for main and test)
+    env = myEnv(flags=FLAGS,
+                device=device)
+    input_dim, output_dim = get_env_dim(env)
+    agent = Agent(input_dim,
+                  output_dim,
+                  FLAGS.hidden_dim, FLAGS.lr, FLAGS.weight_decay)
+
+    agent.dqn.to(device=device)
+    env.guesser.to(device=device)
+
+    # store best result
+    best_val_acc = 0
+    val_list = []
+
+    # counter of validation trials with no improvement, to determine when to stop training
+    val_trials_without_improvement = 0
+    replay_memory = ReplayMemory(FLAGS.capacity)
+    train_dqn = True
+    train_guesser = False
+    i = 0
+    while val_trials_without_improvement < FLAGS.val_trials_wo_im:
+        # if i % (2 * FLAGS.ep_per_trainee) == 0:
+        #     train_dqn = False
+        #     train_guesser = True
+        # if i % (2 * FLAGS.ep_per_trainee) == FLAGS.ep_per_trainee:
+        #     train_dqn = True
+        #     train_guesser = False
+
+        eps = epsilon_annealing(FLAGS.initial_epsilon, FLAGS.min_epsilon, FLAGS.anneal_steps, i)
+        # play an episode
+        play_episode(env,
+                     agent,
+                     replay_memory,
+                     eps,
+                     FLAGS.batch_size,
+                     train_dqn=train_dqn,
+                     train_guesser=train_guesser, mode='training')
+
+        if i % FLAGS.val_interval == 0:
+            # compute performance on validation set
+            new_best_val_acc = val(i_episode=i,
+                                   best_val_acc=best_val_acc, env=env, agent=agent)
+            val_list.append(new_best_val_acc)
+
+            # update best result on validation set and counter
+            if new_best_val_acc > best_val_acc:
+                best_val_acc = new_best_val_acc
+                val_trials_without_improvement = 0
+            else:
+                val_trials_without_improvement += 1
+
+        if i % FLAGS.n_update_target_dqn == 0:
+            agent.update_target_dqn()
+        i += 1
+
+    test(env, agent, input_dim, output_dim)
+    save_plot_acuuracy_epoch(val_list)
+
+    show_sample_paths(6, env, agent)
 
 if __name__ == '__main__':
     os.chdir(FLAGS.directory)
