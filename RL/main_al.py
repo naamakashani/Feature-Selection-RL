@@ -145,7 +145,7 @@ def calculate_td_error(state, action, reward, next_state, done, agent, gamma):
 
     # TD error
     td_error = target_q_value - current_q_value
-    return td_error
+    return td_error.item()
 
 
 def play_episode(env,
@@ -179,25 +179,24 @@ def play_episode(env,
         mask[a] = 0
         total_reward += r
         td = calculate_td_error(s, a, r, next_state, done, agent, FLAGS.gamma)
-        # priorityRM.push(s, a, r, next_state, done, td)
-
-        replay_memory.push(s, a, r, next_state, done)
-        if len(replay_memory) > batch_size:
-            if train_dqn:
-                minibatch = replay_memory.pop(batch_size)
-                train_helper(agent, minibatch, FLAGS.gamma)
-                agent.update_learning_rate()
-        # if len(priorityRM) > batch_size:
+        priorityRM.push(s, a, r, next_state, done, td)
+        # replay_memory.push(s, a, r, next_state, done)
+        # if len(replay_memory) > batch_size:
         #     if train_dqn:
-        #         minibatch, indices, weights  = priorityRM.pop(batch_size)
-        #         td_errors=[]
-        #         for transition, weight in zip(minibatch, weights):
-        #             state, action, reward, next_state, done = transition
-        #             td_error = calculate_td_error(state, action, reward, next_state, done, agent, FLAGS.gamma)
-        #             td_errors.append(td_error)
-        #         priorityRM.update_priorities(indices, td_errors)
+        #         minibatch = replay_memory.pop(batch_size)
         #         train_helper(agent, minibatch, FLAGS.gamma)
         #         agent.update_learning_rate()
+        if len(priorityRM) > batch_size:
+            if train_dqn:
+                minibatch, indices, weights  = priorityRM.pop(batch_size)
+                td_errors=[]
+                for transition, weight in zip(minibatch, weights):
+                    state, action, reward, next_state, done = transition
+                    td_error = calculate_td_error(state, action, reward, next_state, done, agent, FLAGS.gamma)
+                    td_errors.append(td_error)
+                priorityRM.update_priorities(indices, td_errors)
+                train_helper(agent, minibatch, FLAGS.gamma)
+                agent.update_learning_rate()
 
         t += 1
 
@@ -285,12 +284,12 @@ def save_networks(i_episode: int, env, agent,
 
 
 # Function to extract states from replay memory
-def extract_states_from_replay_memory(replay_memory):
-    states = []
-    for experience in replay_memory:
-        state = experience['state']  # Assuming 'state' key holds the state information
-        states.append(state)
-    return np.array(states)
+# def extract_states_from_replay_memory(replay_memory):
+#     states = []
+#     for experience in replay_memory:
+#         state = experience['state']  # Assuming 'state' key holds the state information
+#         states.append(state)
+#     return np.array(states)
 
 
 def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
