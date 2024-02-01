@@ -1,5 +1,7 @@
 import argparse
+import pandas as pd
 from itertools import count
+from random import random
 import numpy as np
 from fastai.data.load import DataLoader
 from matplotlib import pyplot as plt
@@ -60,10 +62,33 @@ def add_noise(X, noise_std=0.01):
 
     Returns:
     - X_noisy: Input features with added noise.
+
+    X_noisy = X.copy()
+    X_noisy= pd.DataFrame(X_noisy)
+    for col in X_noisy.columns:
+        categories = X_noisy[col].cat.categories
+        noise = np.random.randint(-1, 2, size=len(X))
+        X_noisy[col] = (X_noisy[col].cat.codes + noise) % len(categories)
+        X_noisy[col] = X_noisy[col].astype('category').cat.set_categories(categories)
+    return X_noisy
+    """
+
+
+def add_noise(X, noise_std=0.01):
+    """
+    Add Gaussian noise to the input features.
+
+    Parameters:
+    - X: Input features (numpy array).
+    - noise_std: Standard deviation of the Gaussian noise.
+
+    Returns:
+    - X_noisy: Input features with added noise.
     """
     noise = np.random.normal(loc=0, scale=noise_std, size=X.shape)
     X_noisy = X + noise
     return X_noisy
+
 
 
 def balance_class(X, y, noise_std=0.01):
@@ -92,7 +117,18 @@ def balance_class(X, y, noise_std=0.01):
         y_balanced = y.copy()
     return X_balanced, y_balanced
 
-
+def create_data():
+    # Number of points to generate
+    num_points = 100
+    # Generate random x values
+    x1_values = np.random.uniform(low=-30, high=30, size=num_points)
+    x2_values = np.random.uniform(low=-30, high=30, size=num_points)
+    x3_values = np.random.uniform(low=-30, high=30, size=num_points)
+    # Create y values based on the decision boundary if x+y > 9 then 1 else 0
+    labels = np.where((x1_values + x2_values + x3_values > 10), 1, 0)
+    # Split the data into training and testing sets
+    x = np.column_stack((x1_values, x2_values,x3_values))
+    return  x, labels, x1_values, 3
 def create():
     # Set a random seed for reproducibility
 
@@ -112,7 +148,10 @@ def create():
     plt.scatter(x1_values, x2_values, c=labels, cmap='viridis', marker='o', label='Data Points')
     # Split the data into training and testing sets
     x = np.column_stack((x1_values, x2_values))
-    return x, labels, x1_values, 2
+    return x, labels, x1_values, 3
+
+
+
 
 
 class Guesser(nn.Module):
@@ -125,7 +164,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
+        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
         self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
@@ -184,20 +223,47 @@ def mask(input: np.array) -> np.array:
     # check if images has 1 dim
     if len(input.shape) == 1:
         for i in range(input.shape[0]):
-            fraction = 0.3
-            # choose to mask in probability of 0.3
+            #choose a random number between 0 and 1
+            fraction = np.random.uniform(0, 1)
             if (np.random.rand() < fraction):
                 input[i] = 0
         return input
     else:
-
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
-                fraction = 0.3
-                # choose to mask in probability of 0.3
+                fraction = np.random.uniform(0, 1)
                 if (np.random.rand() < fraction):
                     input[j][i] = 0
         return input
+
+
+def create_adverserial_input(inputs, labels, pretrained_model):
+        input = inputs.view(inputs.shape[0], -1).float()
+        input.requires_grad_(True)  # Set requires_grad for input
+        # Forward pass
+        output = pretrained_model(input)
+        labels = torch.Tensor(labels).long()
+        loss = pretrained_model.criterion(output, labels)
+
+        # Backward pass
+        loss.backward()
+
+        # Get the gradients
+        gradient = input.grad
+
+        # Identify the most influential features (those with the largest absolute gradients).
+        absolute_gradients = torch.abs(gradient)
+        max_gradients_indices = torch.argmax(absolute_gradients, dim=-1)
+
+        # Zero out the most influential features.
+        mask = torch.nn.functional.one_hot(max_gradients_indices, num_classes=input.shape[-1]).float()
+        zeroed_input_features = input * (1 - mask)
+        return zeroed_input_features
+
+
+
+
+
 
 
 def val(model, val_loader, best_val_auc=0):
@@ -207,9 +273,8 @@ def val(model, val_loader, best_val_auc=0):
     valid_loss = 0
     with torch.no_grad():
         for input, labels in val_loader:
-            input = input.view(input.shape[0], -1)
-            # call mask function on images
             input = mask(input)
+            input = input.view(input.shape[0], -1)
             input = input.float()
             output = model(input)
             _, predicted = torch.max(output.data, 1)
@@ -240,9 +305,8 @@ def test(test_loader, path_to_save):
     y_pred = []
     with torch.no_grad():
         for images, labels in test_loader:
+            images= mask(images)
             images = images.view(images.shape[0], -1)
-            # call mask function on images
-            images = mask(images)
             images = images.float()
             output = model(images)
             _, predicted = torch.max(output.data, 1)
@@ -281,13 +345,16 @@ def train_model(model,
     training_loss_list = []
     for i in range(1, nepochs):
         running_loss = 0
-        for images, labels in train_loader:
-            images = images.view(images.shape[0], -1)
-            images = mask(images)
-            images = images.float()
+        for input, labels in train_loader:
+            # send images and labels and model to adversarial training
+            if i% 2== 0:
+                input= create_adverserial_input(input, labels, model)
+            else:
+               input = mask(input)
+            input = input.view(input.shape[0], -1).float()
             model.train()
             model.optimizer.zero_grad()
-            output = model(images)
+            output = model(input)
             y_pred = []
             for y in labels:
                 y = torch.Tensor(y).long()

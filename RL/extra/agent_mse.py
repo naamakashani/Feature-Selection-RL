@@ -44,7 +44,7 @@ class Agent(object):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.loss_fn = torch.nn.MSELoss()
-        self.loss_fn = torch.nn.SmoothL1Loss()
+        # self.loss_fn = torch.nn.SmoothL1Loss()
         self.optim = torch.optim.Adam(self.dqn.parameters(),
                                       lr=lr,
                                       weight_decay=weight_decay)

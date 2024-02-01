@@ -64,7 +64,7 @@ def create():
     x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
 
     # Create labels based on the side of the decision boundary
-    labels = np.where(x2_values > -1 * x1_values , 1, 0)
+    labels = np.where(x2_values > -1 * x1_values, 1, 0)
 
     # Create a scatter plot of the dataset with color-coded labels
     plt.scatter(x1_values, x2_values, c=labels, cmap='viridis', marker='o', label='Data Points')
@@ -74,23 +74,36 @@ def create():
     return X_train, X_test, y_train, y_test
 
 
+def create_data():
+    # Number of points to generate
+    num_points = 100
+    # Generate random x values
+    x1_values = np.random.uniform(low=-30, high=30, size=num_points)
+    x2_values = np.random.uniform(low=-30, high=30, size=num_points)
+    x3_values = np.random.uniform(low=-30, high=30, size=num_points)
+    # Create y values based on the decision boundary if x+y > 9 then 1 else 0
+    labels = np.where((x1_values + x2_values + x3_values > 10), 1, 0)
+    # Split the data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(
+        np.column_stack((x1_values, x2_values,x3_values)), labels, test_size=0.2,
+        random_state=42)
+    return X_train, X_test, y_train, y_test
+
+
 def algo():
     # Initialize a Decision Tree classifier
-    X_train, X_test, y_train, y_test = create()
-    dt_classifier = DecisionTreeClassifier(random_state=42)
-
+    X_train, X_test, y_train, y_test = crete_data()
+    dt_classifier = DecisionTreeClassifier(random_state=42, max_depth=3)
     # Fit the classifier to the training data
     dt_classifier.fit(X_train, y_train)
-
     # Make predictions on the test data
     y_pred = dt_classifier.predict(X_test)
-
     # Calculate and print accuracy
     accuracy = accuracy_score(y_test, y_pred)
     print(f'Accuracy: {accuracy * 100:.2f}%')
     # Plot the decision boundary and the tree
-    plt.figure(figsize=(10, 6))
-    plot_tree(dt_classifier, filled=True, feature_names=['X', 'Y'], class_names=['0', '1'])
+    # plt.figure(figsize=(10, 6))
+    # plot_tree(dt_classifier, filled=True, feature_names=['X', 'Y'], class_names=['0', '1'])
     plt.show()
 
 

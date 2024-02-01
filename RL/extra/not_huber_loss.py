@@ -1,18 +1,16 @@
 import torch.nn
-from collections import deque
 from typing import List, Tuple
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
 from env import *
-from agent import *
+from RL.extra.agent_mse import *
 from ReplayMemory import *
-from itertools import count
 from PrioritiziedReplayMemory import *
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--save_dir",
                     type=str,
-                    default='ddqn_models',
+                    default='ddqn_models_not_huber',
                     help="Directory for saved models")
 parser.add_argument("--save_guesser_dir",
                     type=str,
@@ -66,6 +64,7 @@ parser.add_argument("--anneal_steps",
                     type=float,
                     default=1000,
                     help="anneal_steps")
+
 parser.add_argument("--lr",
                     type=float,
                     default=1e-4,
@@ -153,7 +152,7 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim:
+    while not done and t < agent.input_dim / 5:
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask)
         # if r < 0:
@@ -215,26 +214,6 @@ def epsilon_annealing(initial_epsilon, min_epsilon, anneal_steps, current_step):
     return epsilon
 
 
-# def epsilon_annealing(episode: int, max_episode: int, min_eps: float) -> float:
-#     """Returns 𝜺-greedy
-#     1.0---|\
-#           | \
-#           |  \
-#     min_e +---+------->
-#               |
-#               max_episode
-#     Args:
-#         epsiode (int): Current episode (0<= episode)
-#         max_episode (int): After max episode, 𝜺 will be `min_eps`
-#         min_eps (float): 𝜺 will never go below this value
-#     Returns:
-#         float: 𝜺 value
-#     """
-#
-#     slope = (min_eps - 1.0) / max_episode
-#     return max(slope * episode + 1.0, min_eps)
-
-
 def save_networks(i_episode: int, env, agent,
                   val_acc=None) -> None:
     """ A method to save parameters of guesser and dqn """
@@ -264,15 +243,6 @@ def save_networks(i_episode: int, env, agent,
     torch.save(agent.dqn.cpu().state_dict(), dqn_save_path + '~')
     agent.dqn.to(device=device)
     os.rename(dqn_save_path + '~', dqn_save_path)
-
-
-# Function to extract states from replay memory
-# def extract_states_from_replay_memory(replay_memory):
-#     states = []
-#     for experience in replay_memory:
-#         state = experience['state']  # Assuming 'state' key holds the state information
-#         states.append(state)
-#     return np.array(states)
 
 
 def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
@@ -311,7 +281,7 @@ def save_plot_acuuracy_epoch(accuracy_list):
     plt.title('Accuracy per validation epoch')
     plt.ylabel('Accuracy')
     plt.xlabel('validation epoch')
-    plt.savefig('accuracy_per_validation_epoch.png')
+    plt.savefig('accuracy_per_validation_epoch_not_huber.png')
     plt.show()
 
 
@@ -324,7 +294,7 @@ def save_plot_reward_epoch(reward_list):
     plt.title('reward per epoch')
     plt.ylabel('reward')
     plt.xlabel('epoch')
-    plt.savefig('reward_per_epoch.png')
+    plt.savefig('reward_per_epoch_not_huber.png')
     plt.show()
 
 
@@ -338,13 +308,12 @@ def save_plot_step_epoch(steps):
     plt.title('reward per epoch')
     plt.ylabel('reward')
     plt.xlabel('epoch')
-    plt.savefig('steps_per_epoch.png')
+    plt.savefig('steps_per_epoch_not_huber.png')
     plt.show()
 
 
 def test(env, agent, input_dim, output_dim):
     total_steps = 0
-    mask_list=[]
     """ Computes performance nad test data """
 
     print('Loading best networks')
@@ -360,7 +329,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim and not done:
+        while t < agent.input_dim / 5 and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -380,13 +349,6 @@ def test(env, agent, input_dim, output_dim):
             s2, r, done, info = env.step(a, mask)
             y_hat_test[i] = env.guess
             total_steps += number_of_steps
-            # create list of all the masks
-
-    not_binary_tensor = 1 - mask
-    mask_list.append(not_binary_tensor)
-
-
-    intersect,union= check_intersecion_union(mask_list)
 
     C = confusion_matrix(env.y_test, y_hat_test)
     print('confusion matrix: ')
@@ -394,30 +356,10 @@ def test(env, agent, input_dim, output_dim):
     acc = np.sum(np.diag(C)) / len(env.y_test)
     print('Test accuracy: ', np.round(acc, 3))
     print('Average number of steps: ', np.round(total_steps / n_test, 3))
-    return acc,intersect,union
+    return acc
 
 
 #
-def check_intersecion_union(mask_list):
-    # Convert the list of tensors to a 2D tensor
-    selected_features_tensor = torch.stack(mask_list)
-
-    # Compute intersection and union
-    intersection_features = torch.prod(selected_features_tensor, dim=0)
-    union_features = torch.any(selected_features_tensor, dim=0)
-
-    # Count the number of selected features in the intersection and union
-    intersection_size = torch.sum(intersection_features).item()
-    union_size = torch.sum(union_features).item()
-
-    print(f"Intersection Size: {intersection_size}")
-    print(f"Union Size: {union_size}")
-    # Calculate the percentage of samples in which each feature is selected
-    percentage_selected = torch.mean(selected_features_tensor.float(), dim=0) * 100
-    print("Percentage of Samples Each Feature is Selected:")
-    print(percentage_selected)
-    return union_size, intersection_size
-
 def show_sample_paths(n_patients, env, agent):
     """A method to run episodes on randomly chosen positive and negative test patients, and print trajectories to console  """
 
@@ -425,7 +367,7 @@ def show_sample_paths(n_patients, env, agent):
     print('Loading best networks')
     input_dim, output_dim = get_env_dim(env)
     env.guesser, agent.dqn = load_networks(i_episode='best', env=env, input_dim=input_dim, output_dim=output_dim)
-    mask_list = []
+
     for i in range(n_patients):
         print('Starting new episode with a new test patient')
         if i % 2 == 0:
@@ -439,7 +381,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(agent.input_dim )):
+        for t in range(int(agent.input_dim / 5)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -473,7 +415,7 @@ def show_sample_paths(n_patients, env, agent):
                                                                                                             guess,
                                                                                                             env.y_test[
                                                                                                                 idx]))
-
+        print('Episode terminated\n')
 
 
 def val(i_episode: int,
@@ -482,7 +424,6 @@ def val(i_episode: int,
 
     print('Running validation')
     y_hat_val = np.zeros(len(env.y_val))
-    mask_list=[]
 
     for i in range(len(env.X_val)):
         state = env.reset(mode='val',
@@ -491,7 +432,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim and not done:
+        while t < agent.input_dim / 5 and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
@@ -510,8 +451,6 @@ def val(i_episode: int,
             a = agent.output_dim - 1
             s2, r, done, info = env.step(a, mask)
             y_hat_val[i] = env.guess
-            # create list of all the masks
-        mask_list.append(mask)
 
     confmat = confusion_matrix(env.y_val, y_hat_val)
     acc = np.sum(np.diag(confmat)) / len(env.y_val)
@@ -549,7 +488,6 @@ def main():
     i = 0
     rewards_list = []
     steps = []
-
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
         # if i % (2 * FLAGS.ep_per_trainee) == 0:
         #     train_dqn = False
@@ -586,44 +524,28 @@ def main():
             agent.update_target_dqn()
         i += 1
 
-
-    acc ,intersect,unoin = test(env, agent, input_dim, output_dim)
+    acc = test(env, agent, input_dim, output_dim)
     steps = np.mean(steps)
-    return acc, steps, i, intersect, unoin
+    return acc, steps, i
 
-    # save_plot_acuuracy_epoch(val_list)
-    # save_plot_reward_epoch(rewards_list)
-    # check the avergae number of steps
+        # save_plot_acuuracy_epoch(val_list)
+        # save_plot_reward_epoch(rewards_list)
+        # check the avergae number of steps
 
-    # save_plot_step_epoch(steps)
-    # show_sample_paths(6, env, agent)
+        # save_plot_step_epoch(steps)
+        # show_sample_paths(6, env, agent)
 
 
 if __name__ == '__main__':
     os.chdir(FLAGS.directory)
     acc_sum = 0
-    acc_list=[]
     steps_sum = 0
     epochs_sum = 0
-    intersect_sum = 0
-    union_sum = 0
-
-
     for i in range(10):
-        acc, steps, epochs,intersect, union = main()
+        acc, steps, epochs = main()
         acc_sum += acc
-        acc_list.append(acc)
         steps_sum += steps
         epochs_sum += epochs
-        intersect_sum += intersect
-        union_sum += union
-
-    acc_std = np.std(acc_list)
-    acc_mean = np.mean(acc_list)
-    print('The mean accuracy is: {:1.3f} and the standard diviation is: {:1.3f}'.format(acc_mean, acc_std))
     print('average accuracy: ', acc_sum / 10)
     print('average steps: ', steps_sum / 10)
     print('average epochs: ', epochs_sum / 10)
-    print('average intersect: ', intersect_sum / 10)
-    print('average union: ', union_sum / 10)
-

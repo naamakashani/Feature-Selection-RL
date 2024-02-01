@@ -59,7 +59,7 @@ def create_sanity_data():
 
 if __name__ == '__main__':
     algo()
-    dir= "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL"
+    dir= "/RL"
     os.chdir(dir)
     X,y = create_sanity_data()
     #concatenate the labels and the data
