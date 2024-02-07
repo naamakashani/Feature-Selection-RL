@@ -53,14 +53,10 @@ class Guesser(nn.Module):
         input_dim = 2 * self.embedding_dim
         self.lstm = nn.LSTMCell(input_size=input_dim, hidden_size=self.state_dim)
         self.affine = nn.Linear(self.state_dim, 2)
-
         self.initial_c = nn.Parameter(torch.randn(1, self.state_dim), requires_grad=True).to(device=self.device)
         self.initial_h = nn.Parameter(torch.randn(1, self.state_dim), requires_grad=True).to(device=self.device)
-
         self.reset_states()
-
         self.criterion = nn.CrossEntropyLoss()
-
         self.optimizer = torch.optim.Adam(self.parameters(),
                                           weight_decay=weight_decay,
                                           lr=lr)
@@ -71,6 +67,7 @@ class Guesser(nn.Module):
                                                lr_lambda=self.lambda_rule)
 
     def forward(self, question, answer):
+
         ind = torch.LongTensor([question]).to(device=self.device)
         question_embedding = self.q_emb(ind)
         answer_vec = torch.unsqueeze(torch.ones(self.embedding_dim) * answer, 0)

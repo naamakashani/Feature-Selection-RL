@@ -21,11 +21,11 @@ parser.add_argument("--directory",
                     help="Directory for saved models")
 parser.add_argument("--batch_size",
                     type=int,
-                    default=16,
+                    default=64,
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=5000,
+                    default=200,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
@@ -45,7 +45,7 @@ parser.add_argument("--weight_decay",
                     help="l_2 weight penalty")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=5000,
+                    default=20,
                     help="Number of validation trials without improvement")
 
 
@@ -175,43 +175,8 @@ def create():
     x = np.column_stack((x1_values, x2_values))
     return x, labels, x1_values, 3
 
-def create_n_dim():
-        # Number of points to generate
-        num_points = 2000
 
-        # Generate random x values
-        x1_values = np.random.uniform(low=0, high=30, size=num_points)
 
-        # Create y values based on the decision boundary y=-x with some random noise
-        x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
-
-        # Create labels based on the side of the decision boundary
-        labels = np.where(x2_values > -1 * x1_values, 1, 0)
-        # create numpy of zeros
-        X = np.zeros((num_points, 10))
-        i = 0
-        while i < num_points:
-            # choose random index to assign x1 and x2 values
-            index = np.random.randint(0, 10)
-            # assign x1 to index for 5 samples
-            X[i][index] = x1_values[i]
-            X[i + 1][index] = x1_values[i + 1]
-            X[i + 2][index] = x1_values[i + 2]
-            X[i + 3][index] = x1_values[i + 3]
-            X[i + 4][index] = x1_values[i + 4]
-            # choose random index to assign x2 that is not the same as x1
-            index2 = np.random.randint(0, 10)
-            while index2 == index:
-                index2 = np.random.randint(0, 10)
-            X[i][index2] = x2_values[i]
-            X[i + 1][index2] = x2_values[i + 1]
-            X[i + 2][index2] = x2_values[i + 2]
-            X[i + 3][index2] = x2_values[i + 3]
-            X[i + 4][index2] = x2_values[i + 4]
-            i += 5
-        question_names= [0,1,2,3,4,5,6,7,8,9]
-
-        return X, labels, question_names, 10
 
 
 class Guesser(nn.Module):
@@ -224,7 +189,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = create_n_dim()
+        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
         self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
@@ -247,7 +212,7 @@ class Guesser(nn.Module):
         self.optimizer = torch.optim.Adam(self.parameters(),
                                           weight_decay=FLAGS.weight_decay,
                                           lr=FLAGS.lr)
-        self.path_to_save = os.path.join(os.getcwd(), 'model_guesser')
+        self.path_to_save = os.path.join(os.getcwd(), 'model_robust_guesser')
 
     def forward(self, x):
         x = self.layer1(x)
@@ -410,8 +375,8 @@ def train_model(model,
         for input, labels in train_loader:
             # send images and labels and model to adversarial training
             if i% 2== 0:
-                input = mask(input)
-                # input= create_adverserial_input(input, labels, model)
+                # input = mask(input)
+                input= create_adverserial_input(input, labels, model)
             else:
                input = mask(input)
             input = input.view(input.shape[0], -1).float()
@@ -429,8 +394,8 @@ def train_model(model,
             model.optimizer.step()
 
         training_loss_list.append(running_loss / len(train_loader))
-        # print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
-        if i % 20 == 0:
+        print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
+        if i % 2 == 0:
             new_best_val_auc = val(model, val_loader, best_val_auc)
             accuracy_list.append(new_best_val_auc)
             if new_best_val_auc > best_val_auc:

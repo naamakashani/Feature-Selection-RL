@@ -3,9 +3,9 @@ import os
 from sklearn.model_selection import train_test_split
 import gymnasium
 import torch
-import RL.utils as utils
 from RL.guesser import Guesser
 import torch.nn.functional as F
+import math
 
 
 def balance_class(X, y):
@@ -44,7 +44,6 @@ class myEnv(gymnasium.Env):
                  load_pretrained_guesser=True):
         self.guesser = Guesser()
         self.device = device
-        # X, y = balance_class(self.guesser.X, self.guesser.y)
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,
                                                                                 test_size=0.3)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
@@ -138,7 +137,8 @@ class myEnv(gymnasium.Env):
                 next_state[action] = self.X_val[self.patient, action]
             elif mode == 'test':
                 next_state[action] = self.X_test[self.patient, action]
-            self.reward = self.prob_guesser(next_state) - self.prob_guesser(prev_state)
+
+            self.reward = abs(self.prob_guesser(next_state) - self.prob_guesser(prev_state))
             # self.reward = .01 * np.random.rand()
             self.guess = -1
             self.done = False

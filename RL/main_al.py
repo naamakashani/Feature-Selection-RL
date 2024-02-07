@@ -1,3 +1,5 @@
+import shutil
+
 import torch.nn
 from collections import deque
 from typing import List, Tuple
@@ -32,7 +34,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=5,
+                    default=50,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -80,7 +82,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=20,
+                    default=100,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -153,7 +155,7 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim:
+    while not done and t < agent.input_dim  -2 :
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask)
         # if r < 0:
@@ -240,6 +242,7 @@ def save_networks(i_episode: int, env, agent,
     """ A method to save parameters of guesser and dqn """
     if not os.path.exists(FLAGS.save_dir):
         os.makedirs(FLAGS.save_dir)
+
 
     if i_episode == 'best':
         guesser_filename = 'best_guesser.pth'
@@ -360,7 +363,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim and not done:
+        while t < agent.input_dim -2 and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -382,8 +385,8 @@ def test(env, agent, input_dim, output_dim):
             total_steps += number_of_steps
             # create list of all the masks
 
-    not_binary_tensor = 1 - mask
-    mask_list.append(not_binary_tensor)
+        not_binary_tensor = 1 - mask
+        mask_list.append(not_binary_tensor)
 
 
     intersect,union= check_intersecion_union(mask_list)
@@ -428,10 +431,15 @@ def show_sample_paths(n_patients, env, agent):
     mask_list = []
     for i in range(n_patients):
         print('Starting new episode with a new test patient')
-        if i % 2 == 0:
-            idx = np.random.choice(np.where(env.y_test == 1)[0])
-        else:
-            idx = np.random.choice(np.where(env.y_test == 0)[0])
+        #choose random number form 0 to len(env.X_test)
+        idx = np.random.randint(0, len(env.X_test))
+
+
+
+        # if i % 2 == 0:
+        #     idx = np.random.choice(np.where(env.y_test == 1)[0])
+        # else:
+        #     idx = np.random.choice(np.where(env.y_test == 2)[0])
         state = env.reset(mode='test',
                           patient=idx,
                           train_guesser=False)
@@ -439,7 +447,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(agent.input_dim )):
+        for t in range(int(agent.input_dim-2)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -491,7 +499,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim and not done:
+        while t < agent.input_dim-2 and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
@@ -525,6 +533,9 @@ def val(i_episode: int,
 
 
 def main():
+    # delete model files from previous runs
+    if os.path.exists(FLAGS.save_dir):
+        shutil.rmtree(FLAGS.save_dir)
     # define environment and agent (needed for main and test)
     env = myEnv(flags=FLAGS,
                 device=device)
@@ -549,6 +560,8 @@ def main():
     i = 0
     rewards_list = []
     steps = []
+    
+
 
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
         # if i % (2 * FLAGS.ep_per_trainee) == 0:
@@ -587,14 +600,17 @@ def main():
         i += 1
 
 
+
+
     acc ,intersect,unoin = test(env, agent, input_dim, output_dim)
     steps = np.mean(steps)
+    show_sample_paths(6, env, agent)
     return acc, steps, i, intersect, unoin
 
     # save_plot_acuuracy_epoch(val_list)
     # save_plot_reward_epoch(rewards_list)
     # check the avergae number of steps
-
+    #
     # save_plot_step_epoch(steps)
     # show_sample_paths(6, env, agent)
 
