@@ -142,7 +142,7 @@ def load_data(case):
 def load_heart():
     data = []
     labels = []
-    file_path = './heart.csv'
+    file_path = "/RL/extra/heart.csv"
     # Open the CSV file
     with open(file_path, newline='') as csvfile:
         # Create a CSV reader
@@ -174,23 +174,31 @@ def load_heart():
     return X, y, question_names, len(columns_without_label)
 
 
-def load_sanity():
+def load_dermatology():
     data = []
     labels = []
-    file_path = 'C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\data.csv'
+    file_path = 'C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\dermatology_database.csv'
     # Open the CSV file
     with open(file_path, newline='') as csvfile:
         # Create a CSV reader
         csv_reader = csv.reader(csvfile)
         for line in csv_reader:
+            if line[0] == 'erythema':
+                question_names = np.array(line)
+                continue
+
             columns = line
             columns_without_label = columns[0:-1]
             for i in range(len(columns_without_label)):
+                if columns_without_label[i]=='?':
+                    columns_without_label[i]=0
                 columns_without_label[i] = float(columns_without_label[i])
             data.append(columns_without_label)
             labels.append(int(float((columns[-1]))))
 
     # convet to float each element
+    #balance data and labels in multiclass classification
+
 
     # Convert zero_list to a NumPy array
     X = np.array(data)
@@ -199,7 +207,7 @@ def load_sanity():
     n, d = X.shape
     class_names = [0, 1]
     print('loaded data,  {} rows, {} columns'.format(n, d))
-    return X, y, y, len(columns_without_label)
+    return X, y, question_names, len(columns_without_label)
 
 
 def load_gisetta():

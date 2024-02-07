@@ -74,6 +74,48 @@ def create():
     return X_train, X_test, y_train, y_test
 
 
+def create_n_dim():
+        # Number of points to generate
+        num_points = 2000
+
+        # Generate random x values
+        x1_values = np.random.uniform(low=0, high=30, size=num_points)
+
+        # Create y values based on the decision boundary y=-x with some random noise
+        x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
+
+        # Create labels based on the side of the decision boundary
+        labels = np.where(x2_values > -1 * x1_values, 1, 0)
+        #create numpy of zeros
+        X = np.zeros((num_points,10 ))
+        i=0
+        while i < num_points:
+            #choose random index to assign x1 and x2 values
+            index = np.random.randint(0, 10)
+            #assign x1 to index for 5 samples
+            X[i][index] = x1_values[i]
+            X[i+1][index] = x1_values[i+1]
+            X[i+2][index] = x1_values[i+2]
+            X[i+3][index] = x1_values[i+3]
+            X[i+4][index] = x1_values[i+4]
+            #choose random index to assign x2 that is not the same as x1
+            index2 = np.random.randint(0, 10)
+            while index2 == index:
+                index2 = np.random.randint(0, 10)
+            X[i][index2] = x2_values[i]
+            X[i+1][index2] = x2_values[i+1]
+            X[i+2][index2] = x2_values[i+2]
+            X[i+3][index2] = x2_values[i+3]
+            X[i+4][index2] = x2_values[i+4]
+            i+=5
+
+
+        # Split the data into training and testing sets
+        X_train, X_test, y_train, y_test = train_test_split(X, labels,
+                                                            test_size=0.2,
+                                                            random_state=42)
+        return X_train, X_test, y_train, y_test
+
 def create_data():
     # Number of points to generate
     num_points = 100
@@ -88,23 +130,48 @@ def create_data():
         np.column_stack((x1_values, x2_values,x3_values)), labels, test_size=0.2,
         random_state=42)
     return X_train, X_test, y_train, y_test
+def get_selected_features(tree, X):
+    # Traverse the tree for each sample in X and collect selected features
+    selected_features = []
+    for sample in X:
+        node = 0
+        features = set()
+        while tree.children_left[node] != -1:
+            feature = tree.feature[node]
+            features.add(feature)
+            threshold = tree.threshold[node]
+            if sample[feature] <= threshold:
+                node = tree.children_left[node]
+            else:
+                node = tree.children_right[node]
+        selected_features.append(features)
+    return selected_features
 
 
 def algo():
     # Initialize a Decision Tree classifier
-    X_train, X_test, y_train, y_test = crete_data()
-    dt_classifier = DecisionTreeClassifier(random_state=42, max_depth=3)
+    X_train, X_test, y_train, y_test = create_n_dim()
+    dt_classifier = DecisionTreeClassifier()
     # Fit the classifier to the training data
     dt_classifier.fit(X_train, y_train)
+    #check depth of the tree
+    print(dt_classifier.get_depth())
     # Make predictions on the test data
     y_pred = dt_classifier.predict(X_test)
     # Calculate and print accuracy
     accuracy = accuracy_score(y_test, y_pred)
     print(f'Accuracy: {accuracy * 100:.2f}%')
-    # Plot the decision boundary and the tree
-    # plt.figure(figsize=(10, 6))
-    # plot_tree(dt_classifier, filled=True, feature_names=['X', 'Y'], class_names=['0', '1'])
-    plt.show()
+    # Get selected paths for test samples
+    selected_paths = get_selected_features(dt_classifier.tree_, X_test)
+
+    # Calculate intersection and union of selected paths
+    intersection = set.intersection(*selected_paths)
+    union = set.union(*selected_paths)
+
+    print("Intersection of selected paths:", intersection)
+    print("Union of selected paths:", union)
+
+
 
 
 if __name__ == '__main__':
