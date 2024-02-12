@@ -3,7 +3,8 @@ import os
 from sklearn.model_selection import train_test_split
 import gymnasium
 import torch
-from lstm_model.lstm_guesser_model import LSTM, save_model, val
+from agent_lstm import *
+from lstm_guesser_model import *
 
 import torch.nn.functional as F
 import math
@@ -43,7 +44,7 @@ class myEnv(gymnasium.Env):
                  device,
                  oversample=True,
                  load_pretrained_guesser=True):
-        self.guesser = Guesser()
+        self.guesser = LSTM()
         self.device = device
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,
                                                                                 test_size=0.3)
@@ -55,7 +56,7 @@ class myEnv(gymnasium.Env):
         self.action_probs = torch.from_numpy(np.array(cost_list))
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
-            save_dir = os.path.join(os.getcwd(), 'model_guesser')
+            save_dir = os.path.join(os.getcwd(), 'model_guesser_lstm')
             guesser_filename = 'best_guesser.pth'
             guesser_load_path = os.path.join(save_dir, guesser_filename)
             if os.path.exists(guesser_load_path):
@@ -123,9 +124,12 @@ class myEnv(gymnasium.Env):
         if torch.cuda.is_available():
             guesser_input = guesser_input.cuda()
         self.guesser.train(mode=False)
+        guesser_input = guesser_input.reshape(-1, self.guesser.features_size, 1)
         self.probs = self.guesser(guesser_input)
+        self.probs = F.softmax(self.probs, dim=1)
         self.guess = torch.argmax(self.probs).item()
-        self.correct_prob = self.probs[self.y_train[self.patient]].item()
+        class_index = self.y_train[self.patient].item()
+        self.correct_prob = self.probs[0,class_index].item()
         return self.correct_prob
 
     def update_state(self, action, mode, mask):

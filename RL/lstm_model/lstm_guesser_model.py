@@ -1,13 +1,15 @@
 import os
 import torch
-from sklearn.metrics import confusion_matrix
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-from torchvision import datasets, transforms
-import RL.utils as utils
+import utils_lstm as utils
 from sklearn.model_selection import train_test_split
 import numpy as np
+
+
+
 #hyperparameters
+
 sequence_length = 8
 input_size = 1
 hidden_size = 128
@@ -18,15 +20,16 @@ num_epochs = 20
 learning_rate = 0.01
 
 class LSTM(nn.Module):
-    def __init__(self, input_len, hidden_size, num_layers,num_classes):
+    def __init__(self):
         super(LSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_len, hidden_size, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
         self.output_layer = nn.Linear(hidden_size, num_classes)
         self.loss_function = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
         self.path_to_save = os.path.join(os.getcwd(), 'model_guesser_lstm')
+        self.X, self.y, self.question_names, self.features_size = utils.create_n_dim()
 
     def forward(self,X):
         hidden_states = torch.zeros(self.num_layers, X.size(0), self.hidden_size)
@@ -118,7 +121,7 @@ def train(num_epochs,model,train_dataloader,data_loader_val):
 def test(test_loader, path_to_save):
     guesser_filename = 'best_guesser.pth'
     guesser_load_path = os.path.join(path_to_save, guesser_filename)
-    model = LSTM(input_size, hidden_size, num_layers, num_classes)
+    model = LSTM()
     guesser_state_dict = torch.load(guesser_load_path)
     model.load_state_dict(guesser_state_dict)
     model.eval()
@@ -146,11 +149,11 @@ def test(test_loader, path_to_save):
 
 
 def main():
-    model = LSTM(input_size, hidden_size, num_layers, num_classes)
-    X, y, question_names, features_size = utils.load_diabetes()
+    model = LSTM()
 
-    X_train, X_test, y_train, y_test = train_test_split(X,
-                                                        y,
+
+    X_train, X_test, y_train, y_test = train_test_split(model.X,
+                                                        model.y,
                                                         test_size=0.33,
                                                         random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_train,
@@ -181,6 +184,6 @@ def main():
     test(data_loader_test, model.path_to_save)
 
 if __name__ == "__main__":
-    os.chdir("C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL")
+    os.chdir("C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model\\")
     main()
 

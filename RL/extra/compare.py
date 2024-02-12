@@ -17,18 +17,44 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 import numpy as np
-
+def get_selected_features(tree, X):
+    # Traverse the tree for each sample in X and collect selected features
+    selected_features = []
+    for sample in X:
+        node = 0
+        features = set()
+        while tree.children_left[node] != -1:
+            feature = tree.feature[node]
+            features.add(feature)
+            threshold = tree.threshold[node]
+            if sample[feature] <= threshold:
+                node = tree.children_left[node]
+            else:
+                node = tree.children_right[node]
+        selected_features.append(features)
+    return selected_features
 
 def decision_tree():
     # Splitting data into training and testing sets
-    X, y, _, number_of_features = utils.load_data_labels()
+    X, y, _, number_of_features = utils.load_diabetes()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    clf = DecisionTreeClassifier(max_depth=10)
+    clf = DecisionTreeClassifier(max_depth=2)  # You can specify hyperparameters here
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Accuracy: {accuracy}")
+    print(clf.get_depth())
     print(f"Number of features: {number_of_features}")
+    selected_paths = get_selected_features(clf.tree_, X_test)
+
+    # Calculate intersection and union of selected paths
+    intersection = set.intersection(*selected_paths)
+    union = set.union(*selected_paths)
+
+    print("Intersection of selected paths:", intersection)
+    print("Union of selected paths:", union)
+
+
 
 
 def create_data():
@@ -73,7 +99,7 @@ def create():
 
 
 def XGboost():
-    X_train, X_test, y_train, y_test = create()
+    X_train, X_test, y_train, y_test = utils.load_diabetes()
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dtest = xgb.DMatrix(X_test, label=y_test)
     params = {
@@ -156,6 +182,50 @@ def SVM():
     print(f"Accuracy of SVM: {accuracy_svm:.3f}")
 
 
+import xgboost as xgb
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import load_diabetes
+import numpy as np
+
+
+def get_selected_features_xgboost(model, threshold):
+    # Get feature importance from the trained XGBoost model
+    importance = model.get_score(importance_type='gain')
+    sorted_importance = sorted(importance.items(), key=lambda x: x[1], reverse=True)
+
+    # Extract selected features based on threshold
+    selected_features = [feature for feature, importance in sorted_importance if importance >= threshold]
+    return selected_features
+
+
+def XGboost_new():
+    X, y, _, number_of_features = utils.load_diabetes()
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    dtrain = xgb.DMatrix(X_train, label=y_train)
+    dtest = xgb.DMatrix(X_test, label=y_test)
+    params = {
+        'objective': 'binary:logistic',  # for binary classification
+        'max_depth': 2,
+        'learning_rate': 0.1,
+        'eval_metric': 'logloss'
+    }
+    num_rounds = 50  # Number of boosting rounds
+    model = xgb.train(params, dtrain, num_rounds)
+    y_pred = model.predict(dtest)
+    threshold = 0.5  # Adjust threshold for binary classification
+    y_pred_binary = [1 if pred > threshold else 0 for pred in y_pred]
+
+    accuracy = accuracy_score(y_test, y_pred_binary)
+
+    # Get selected features based on feature importance
+    selected_features = get_selected_features_xgboost(model, threshold)
+    return accuracy, selected_features
+
+
+
+
+
 def main():
     sum = 0
     sum_depth = 0
@@ -169,4 +239,19 @@ def main():
 
 if __name__ == "__main__":
     os.chdir("C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\")
-    main()
+    decision_tree()
+
+
+    # Calculate intersection and union with previously calculated selected paths
+    # Call the XGboost function
+    accuracy_xgboost, selected_features_xgboost = XGboost_new()
+
+    # Calculate intersection and union with previously calculated selected paths (if available)
+    intersection = set(selected_features_xgboost).intersection(*selected_features_xgboost)
+    union = set(selected_features_xgboost).union(*selected_features_xgboost)
+
+    print("Intersection of selected features from XGBoost:", intersection)
+    print("Union of selected features from XGBoost:", union)
+
+    print("Intersection of selected features from XGBoost and Decision Tree:", intersection)
+    print("Union of selected features from XGBoost and Decision Tree:", union)

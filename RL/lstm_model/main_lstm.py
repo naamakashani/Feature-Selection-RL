@@ -1,15 +1,11 @@
 import shutil
-
 import torch.nn
-from collections import deque
 from typing import List, Tuple
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
-from env import *
-from agent import *
-from ReplayMemory import *
-from itertools import count
-from PrioritiziedReplayMemory import *
+from env_lstm import *
+from agent_lstm import *
+from PrioritiziedReplayMemory_lstm import *
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--save_dir",
@@ -18,11 +14,11 @@ parser.add_argument("--save_dir",
                     help="Directory for saved models")
 parser.add_argument("--save_guesser_dir",
                     type=str,
-                    default='model_guesser',
+                    default='model_guesser_lstm',
                     help="Directory for saved guesser model")
 parser.add_argument("--directory",
                     type=str,
-                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL",
+                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model",
                     help="Directory for saved models")
 parser.add_argument("--gamma",
                     type=float,
@@ -134,7 +130,7 @@ def calculate_td_error(state, action, reward, next_state, done, agent, gamma):
 
 def play_episode(env,
                  agent: Agent,
-                 replay_memory: ReplayMemory, priorityRM: PrioritizedReplayMemory,
+                  priorityRM: PrioritizedReplayMemory,
                  eps: float,
                  batch_size: int,
                  train_guesser=True,
@@ -155,7 +151,7 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim  -2 :
+    while not done and t < agent.input_dim /4 :
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask)
         # if r < 0:
@@ -164,12 +160,6 @@ def play_episode(env,
         total_reward += r
         td = calculate_td_error(s, a, r, next_state, done, agent, FLAGS.gamma)
         priorityRM.push(s, a, r, next_state, done, td)
-        # replay_memory.push(s, a, r, next_state, done)
-        # if len(replay_memory) > batch_size:
-        #     if train_dqn:
-        #         minibatch = replay_memory.pop(batch_size)
-        #         train_helper(agent, minibatch, FLAGS.gamma)
-        #         agent.update_learning_rate()
         if len(priorityRM) > batch_size:
             if train_dqn:
                 minibatch, indices, weights = priorityRM.pop(batch_size)
@@ -292,7 +282,7 @@ def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
     dqn_load_path = os.path.join(FLAGS.save_dir, dqn_filename)
 
     # load guesser
-    guesser = Guesser()
+    guesser = LSTM()
     guesser_state_dict = torch.load(guesser_load_path)
     guesser.load_state_dict(guesser_state_dict)
     guesser.to(device=device)
@@ -363,7 +353,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim -2 and not done:
+        while t < agent.input_dim /4 and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -447,7 +437,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(agent.input_dim-2)):
+        for t in range(int(agent.input_dim/4)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -474,13 +464,13 @@ def show_sample_paths(n_patients, env, agent):
         if guess == -1:
             state, reward, done, guess = env.step(agent.output_dim - 1, mask, mode='test')
 
-            print('Step: {}, Ready to make a guess: Prob({})={:1.3f}, Guess: y={}, Ground truth: {}'.format(t + 1,
-                                                                                                            guess,
-                                                                                                            env.probs[
-                                                                                                                guess],
-                                                                                                            guess,
-                                                                                                            env.y_test[
-                                                                                                                idx]))
+            # print('Step: {}, Ready to make a guess: Prob({})={:1.3f}, Guess: y={}, Ground truth: {}'.format(t + 1,
+            #                                                                                                 guess,
+            #                                                                                                 env.probs[
+            #                                                                                                     guess],
+            #                                                                                                 guess,
+            #                                                                                                 env.y_test[
+            #                                                                                                     idx]))
 
 
 
@@ -499,7 +489,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim-2 and not done:
+        while t < agent.input_dim/4 and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
@@ -553,7 +543,6 @@ def main():
 
     # counter of validation trials with no improvement, to determine when to stop training
     val_trials_without_improvement = 0
-    replay_memory = ReplayMemory(FLAGS.capacity)
     priorityRP = PrioritizedReplayMemory(FLAGS.capacity)
     train_dqn = True
     train_guesser = False
@@ -575,7 +564,7 @@ def main():
         # play an episode
         reward, t = play_episode(env,
                                  agent,
-                                 replay_memory, priorityRP,
+                                 priorityRP,
                                  eps,
                                  FLAGS.batch_size,
                                  train_dqn=train_dqn,

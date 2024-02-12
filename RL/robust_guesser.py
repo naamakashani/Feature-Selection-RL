@@ -48,7 +48,6 @@ parser.add_argument("--val_trials_wo_im",
                     default=20,
                     help="Number of validation trials without improvement")
 
-
 FLAGS = parser.parse_args(args=[])
 
 
@@ -116,6 +115,7 @@ def balance_class_multi(X, y, noise_std=0.01):
 
     return X_balanced, y_balanced
 
+
 def balance_class(X, y, noise_std=0.01):
     unique_classes, class_counts = np.unique(y, return_counts=True)
     minority_class = unique_classes[np.argmin(class_counts)]
@@ -142,6 +142,7 @@ def balance_class(X, y, noise_std=0.01):
         y_balanced = y.copy()
     return X_balanced, y_balanced
 
+
 def create_data():
     # Number of points to generate
     num_points = 100
@@ -152,8 +153,10 @@ def create_data():
     # Create y values based on the decision boundary if x+y > 9 then 1 else 0
     labels = np.where((x1_values + x2_values + x3_values > 10), 1, 0)
     # Split the data into training and testing sets
-    x = np.column_stack((x1_values, x2_values,x3_values))
-    return  x, labels, x1_values, 3
+    x = np.column_stack((x1_values, x2_values, x3_values))
+    return x, labels, x1_values, 3
+
+
 def create():
     # Set a random seed for reproducibility
 
@@ -174,9 +177,6 @@ def create():
     # Split the data into training and testing sets
     x = np.column_stack((x1_values, x2_values))
     return x, labels, x1_values, 3
-
-
-
 
 
 class Guesser(nn.Module):
@@ -244,11 +244,10 @@ def mask(input: np.array) -> np.array:
     :return: masked input
     '''
 
-
     # check if images has 1 dim
     if len(input.shape) == 1:
         for i in range(input.shape[0]):
-            #choose a random number between 0 and 1
+            # choose a random number between 0 and 1
             # fraction = np.random.uniform(0, 1)
             fraction = 0.3
             if (np.random.rand() < fraction):
@@ -265,32 +264,27 @@ def mask(input: np.array) -> np.array:
 
 
 def create_adverserial_input(inputs, labels, pretrained_model):
-        input = inputs.view(inputs.shape[0], -1).float()
-        input.requires_grad_(True)  # Set requires_grad for input
-        # Forward pass
-        output = pretrained_model(input)
-        labels = torch.Tensor(labels).long()
-        loss = pretrained_model.criterion(output, labels)
+    input = inputs.view(inputs.shape[0], -1).float()
+    input.requires_grad_(True)  # Set requires_grad for input
+    # Forward pass
+    output = pretrained_model(input)
+    labels = torch.Tensor(labels).long()
+    loss = pretrained_model.criterion(output, labels)
 
-        # Backward pass
-        loss.backward()
+    # Backward pass
+    loss.backward()
 
-        # Get the gradients
-        gradient = input.grad
+    # Get the gradients
+    gradient = input.grad
 
-        # Identify the most influential features (those with the largest absolute gradients).
-        absolute_gradients = torch.abs(gradient)
-        max_gradients_indices = torch.argmax(absolute_gradients, dim=-1)
+    # Identify the most influential features (those with the largest absolute gradients).
+    absolute_gradients = torch.abs(gradient)
+    max_gradients_indices = torch.argmax(absolute_gradients, dim=-1)
 
-        # Zero out the most influential features.
-        mask = torch.nn.functional.one_hot(max_gradients_indices, num_classes=input.shape[-1]).float()
-        zeroed_input_features = input * (1 - mask)
-        return zeroed_input_features
-
-
-
-
-
+    # Zero out the most influential features.
+    mask = torch.nn.functional.one_hot(max_gradients_indices, num_classes=input.shape[-1]).float()
+    zeroed_input_features = input * (1 - mask)
+    return zeroed_input_features
 
 
 def val(model, val_loader, best_val_auc=0):
@@ -332,7 +326,7 @@ def test(test_loader, path_to_save):
     y_pred = []
     with torch.no_grad():
         for images, labels in test_loader:
-            images= mask(images)
+            images = mask(images)
             images = images.view(images.shape[0], -1)
             images = images.float()
             output = model(images)
@@ -374,11 +368,10 @@ def train_model(model,
         running_loss = 0
         for input, labels in train_loader:
             # send images and labels and model to adversarial training
-            if i% 2== 0:
-                # input = mask(input)
-                input= create_adverserial_input(input, labels, model)
+            if i % 2 == 0:
+                input = create_adverserial_input(input, labels, model)
             else:
-               input = mask(input)
+                input = mask(input)
             input = input.view(input.shape[0], -1).float()
             model.train()
             model.optimizer.zero_grad()

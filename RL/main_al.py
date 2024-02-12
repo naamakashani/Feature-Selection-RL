@@ -155,7 +155,7 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim  -2 :
+    while not done and t < agent.input_dim /4 :
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask)
         # if r < 0:
@@ -363,7 +363,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim -2 and not done:
+        while t < agent.input_dim /4and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -447,7 +447,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(agent.input_dim-2)):
+        for t in range(int(agent.input_dim/4)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -499,7 +499,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim-2 and not done:
+        while t < agent.input_dim/4 and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
