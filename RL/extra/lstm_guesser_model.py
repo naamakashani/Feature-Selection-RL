@@ -6,9 +6,7 @@ import utils_lstm as utils
 from sklearn.model_selection import train_test_split
 import numpy as np
 
-
-
-#hyperparameters
+# hyperparameters
 
 sequence_length = 8
 input_size = 1
@@ -16,8 +14,9 @@ hidden_size = 128
 num_layers = 2
 num_classes = 2
 batch_size = 100
-num_epochs = 20
+num_epochs = 200
 learning_rate = 0.01
+
 
 class LSTM(nn.Module):
     def __init__(self):
@@ -28,10 +27,10 @@ class LSTM(nn.Module):
         self.output_layer = nn.Linear(hidden_size, num_classes)
         self.loss_function = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
-        self.path_to_save = os.path.join(os.getcwd(), 'model_guesser_lstm')
-        self.X, self.y, self.question_names, self.features_size = utils.create_n_dim()
+        self.path_to_save = os.path.join(os.getcwd(), '../lstm_model/model_guesser_lstm')
+        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
 
-    def forward(self,X):
+    def forward(self, X):
         hidden_states = torch.zeros(self.num_layers, X.size(0), self.hidden_size)
         cell_states = torch.zeros(self.num_layers, X.size(0), self.hidden_size)
         out, _ = self.lstm(X, (hidden_states, cell_states))
@@ -58,13 +57,13 @@ def save_model(model):
     os.rename(guesser_save_path + '~', guesser_save_path)
 
 
-def val(model,val_dataloader,best_val_auc=0):
+def val(model, val_dataloader, best_val_auc=0):
     correct = 0
     total = 0
     model.eval()
     with torch.no_grad():
         for batch, (images, labels) in enumerate(val_dataloader):
-            images=images.float()
+            images = images.float()
             images = images.reshape(-1, sequence_length, input_size)
             outputs = model(images)
             y_pred = []
@@ -82,15 +81,42 @@ def val(model,val_dataloader,best_val_auc=0):
         return accuracy
 
 
-def train(num_epochs,model,train_dataloader,data_loader_val):
-    best_val_auc=0
+def mask(input: np.array) -> np.array:
+    '''
+    Mask feature of the input
+    :param images: input
+    :return: masked input
+    '''
+
+    # check if images has 1 dim
+    if len(input.shape) == 1:
+        for i in range(input.shape[0]):
+            # choose a random number between 0 and 1
+            # fraction = np.random.uniform(0, 1)
+            fraction = 0.3
+            if (np.random.rand() < fraction):
+                input[i] = 0
+        return input
+    else:
+        for j in range(int(len(input))):
+            for i in range(input[0].shape[0]):
+                # fraction = np.random.uniform(0, 1)
+                fraction = 0.3
+                if (np.random.rand() < fraction):
+                    input[j][i] = 0
+        return input
+
+
+def train(num_epochs, model, train_dataloader, data_loader_val):
+    best_val_auc = 0
     total_step = len(train_dataloader)
-    val_trials_without_improvement=0
-    max_val_trials_wo_im=20
+    val_trials_without_improvement = 0
+    max_val_trials_wo_im = 20
     for epoch in range(num_epochs):
         for batch, (images, labels) in enumerate(train_dataloader):
-            images=images.float()
+            images = images.float()
             images = images.reshape(-1, sequence_length, input_size)
+            images = mask(images)
             outputs = model(images)
             y_pred = []
             for y in labels:
@@ -104,10 +130,10 @@ def train(num_epochs,model,train_dataloader,data_loader_val):
             if (batch + 1) % 100 == 0:
                 print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
                       .format(epoch + 1, num_epochs, batch + 1, total_step, loss.item()))
-        if epoch%2==0:
-            acuuracy= val(model,data_loader_val,best_val_auc)
-            if acuuracy>best_val_auc:
-                best_val_auc=acuuracy
+        if epoch % 2 == 0:
+            acuuracy = val(model, data_loader_val, best_val_auc)
+            if acuuracy > best_val_auc:
+                best_val_auc = acuuracy
                 val_trials_without_improvement = 0
             else:
                 val_trials_without_improvement += 1
@@ -144,13 +170,8 @@ def test(test_loader, path_to_save):
         print('Accuracy of the network on the test images: {} %'.format(100 * accuracy))
 
 
-
-
-
-
 def main():
     model = LSTM()
-
 
     X_train, X_test, y_train, y_test = train_test_split(model.X,
                                                         model.y,
@@ -183,7 +204,7 @@ def main():
 
     test(data_loader_test, model.path_to_save)
 
-if __name__ == "__main__":
-    os.chdir("C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model\\")
-    main()
 
+if __name__ == "__main__":
+    os.chdir("/RL/lstm_model\\")
+    main()

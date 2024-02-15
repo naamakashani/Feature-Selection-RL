@@ -1,13 +1,8 @@
-import numpy as np
-import os
-from sklearn.model_selection import train_test_split
 import gymnasium
-import torch
 from agent_lstm import *
-from lstm_guesser_model import *
+from RL.lstm_model.lstm_guesser import *
 
 import torch.nn.functional as F
-import math
 
 
 def balance_class(X, y):
@@ -44,7 +39,7 @@ class myEnv(gymnasium.Env):
                  device,
                  oversample=True,
                  load_pretrained_guesser=True):
-        self.guesser = LSTM()
+        self.guesser = Guesser()
         self.device = device
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,
                                                                                 test_size=0.3)
@@ -54,6 +49,12 @@ class myEnv(gymnasium.Env):
 
         cost_list = np.array(np.ones(self.guesser.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
+
+        self.lstm = nn.LSTMCell(input_size=self.guesser.features_size+1, hidden_size=self.guesser.features_size)
+        self.initial_c = nn.Parameter(torch.randn(1, self.guesser.features_size), requires_grad=True).to(device=self.device)
+        self.initial_h = nn.Parameter(torch.randn(1, self.guesser.features_size), requires_grad=True).to(device=self.device)
+        self.reset_states()
+
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
             save_dir = os.path.join(os.getcwd(), 'model_guesser_lstm')
@@ -64,11 +65,23 @@ class myEnv(gymnasium.Env):
                 guesser_state_dict = torch.load(guesser_load_path)
                 self.guesser.load_state_dict(guesser_state_dict)
 
+    def reset_states(self):
+        self.lstm_h = (torch.zeros(1, self.guesser.features_size) + self.initial_h).to(device=self.device)
+        self.lstm_c = (torch.zeros(1, self.guesser.features_size) + self.initial_c).to(device=self.device)
+
+    def next_lstm_state(self, answer_encode):
+        self.lstm_h, self.lstm_c = self.lstm(answer_encode, (self.lstm_h, self.lstm_c))
+        return self.lstm_h.data.cpu().numpy()
+
     def reset(self,
               mode='training',
               patient=0,
               train_guesser=True):
-        self.state = np.concatenate([np.zeros(self.guesser.features_size)])
+
+        # Reset state
+        self.reset_states()
+        self.state = self.lstm_h.data.cpu().numpy()
+
 
         if mode == 'training':
             self.patient = np.random.randint(self.X_train.shape[0])
@@ -101,8 +114,8 @@ class myEnv(gymnasium.Env):
 
         # update state
         next_state = self.update_state(action, mode, mask)
-        self.state = np.array(next_state)
-        self.s = np.array(self.state)
+        self.state =next_state
+        self.s = self.state
 
         # compute reward
         self.reward = self.compute_reward(mode)
@@ -124,26 +137,29 @@ class myEnv(gymnasium.Env):
         if torch.cuda.is_available():
             guesser_input = guesser_input.cuda()
         self.guesser.train(mode=False)
-        guesser_input = guesser_input.reshape(-1, self.guesser.features_size, 1)
         self.probs = self.guesser(guesser_input)
         self.probs = F.softmax(self.probs, dim=1)
         self.guess = torch.argmax(self.probs).item()
         class_index = self.y_train[self.patient].item()
-        self.correct_prob = self.probs[0,class_index].item()
+        self.correct_prob = self.probs[0, class_index].item()
         return self.correct_prob
 
     def update_state(self, action, mode, mask):
-        prev_state = np.array(self.state)
-        next_state = np.array(self.state)
+        prev_state = self.state
+
+
         if action < self.guesser.features_size:  # Not making a guess
             if mode == 'training':
-                next_state[action] = self.X_train[self.patient, action]
+                answer = self.X_train[self.patient, action]
             elif mode == 'val':
-                next_state[action] = self.X_val[self.patient, action]
+                answer = self.X_val[self.patient, action]
             elif mode == 'test':
-                next_state[action] = self.X_test[self.patient, action]
+                answer = self.X_test[self.patient, action]
 
-            self.reward = abs(self.prob_guesser(next_state) - self.prob_guesser(prev_state))
+            answer_encode = torch.zeros(1, self.guesser.features_size +1).to(device=self.device)
+            answer_encode[0, action] = answer
+            next_state= self.next_lstm_state(answer_encode)
+            self.reward = self.prob_guesser(next_state) - self.prob_guesser(prev_state)
             # self.reward = .01 * np.random.rand()
             self.guess = -1
             self.done = False

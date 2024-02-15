@@ -18,7 +18,7 @@ parser.add_argument("--save_dir",
                     help="Directory for saved models")
 parser.add_argument("--save_guesser_dir",
                     type=str,
-                    default='model_guesser',
+                    default='model_robust_guesser',
                     help="Directory for saved guesser model")
 parser.add_argument("--directory",
                     type=str,
@@ -34,7 +34,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=50,
+                    default=10,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -82,7 +82,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=100,
+                    default=20,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -155,7 +155,7 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim /4 :
+    while not done and t < agent.input_dim /5 :
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask)
         # if r < 0:
@@ -363,7 +363,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim /4and not done:
+        while t < agent.input_dim /5 and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -447,7 +447,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(agent.input_dim/4)):
+        for t in range(int(agent.input_dim/5)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -499,7 +499,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim/4 and not done:
+        while t < agent.input_dim/5 and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
@@ -627,12 +627,14 @@ if __name__ == '__main__':
 
     for i in range(10):
         acc, steps, epochs,intersect, union = main()
+        print ('acc:', acc, 'steps:', steps, 'epochs:', epochs, 'intersect:', intersect, 'union:', union)
         acc_sum += acc
         acc_list.append(acc)
         steps_sum += steps
         epochs_sum += epochs
         intersect_sum += intersect
         union_sum += union
+
 
     acc_std = np.std(acc_list)
     acc_mean = np.mean(acc_list)

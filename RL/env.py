@@ -5,7 +5,7 @@ import gymnasium
 import torch
 from RL.guesser import Guesser
 import torch.nn.functional as F
-import math
+
 
 
 def balance_class(X, y):
@@ -54,7 +54,7 @@ class myEnv(gymnasium.Env):
         self.action_probs = torch.from_numpy(np.array(cost_list))
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
-            save_dir = os.path.join(os.getcwd(), 'model_guesser')
+            save_dir = os.path.join(os.getcwd(), 'model_robust_guesser')
             guesser_filename = 'best_guesser.pth'
             guesser_load_path = os.path.join(save_dir, guesser_filename)
             if os.path.exists(guesser_load_path):

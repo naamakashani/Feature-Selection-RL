@@ -1,4 +1,6 @@
 import shutil
+
+import numpy
 import torch.nn
 from typing import List, Tuple
 from matplotlib import pyplot as plt
@@ -14,7 +16,7 @@ parser.add_argument("--save_dir",
                     help="Directory for saved models")
 parser.add_argument("--save_guesser_dir",
                     type=str,
-                    default='model_guesser_lstm',
+                    default='C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\model_guesser_lstm',
                     help="Directory for saved guesser model")
 parser.add_argument("--directory",
                     type=str,
@@ -30,7 +32,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=50,
+                    default=15,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -78,7 +80,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=100,
+                    default=20,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -101,9 +103,11 @@ def train_helper(agent: Agent,
     states = np.vstack([x.state for x in minibatch])
     actions = np.array([x.action for x in minibatch])
     rewards = np.array([x.reward for x in minibatch])
-    next_states = np.vstack([x.next_state for x in minibatch])
-    done = np.array([x.done for x in minibatch])
+    #convert tensor to numpy
+    next_states =np.vstack([x.next_state for x in minibatch])
 
+    # Convert each tensor to a NumPy array after detaching from computation graph
+    done = np.array([x.done for x in minibatch])
     Q_predict = agent.get_Q(states)
     Q_target = Q_predict.clone().cpu().data.numpy()
     max_actions = np.argmax(agent.get_Q(next_states).cpu().data.numpy(), axis=1)
@@ -151,7 +155,7 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim /4 :
+    while not done and t < agent.input_dim /5:
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask)
         # if r < 0:
@@ -282,7 +286,7 @@ def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
     dqn_load_path = os.path.join(FLAGS.save_dir, dqn_filename)
 
     # load guesser
-    guesser = LSTM()
+    guesser = Guesser()
     guesser_state_dict = torch.load(guesser_load_path)
     guesser.load_state_dict(guesser_state_dict)
     guesser.to(device=device)
@@ -353,7 +357,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim /4 and not done:
+        while t < agent.input_dim /5 and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -437,7 +441,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(agent.input_dim/4)):
+        for t in range(int(agent.input_dim/5)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -489,7 +493,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim/4 and not done:
+        while t < agent.input_dim/5 and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
@@ -549,6 +553,7 @@ def main():
     i = 0
     rewards_list = []
     steps = []
+
     
 
 
@@ -587,6 +592,7 @@ def main():
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
         i += 1
+
 
 
 

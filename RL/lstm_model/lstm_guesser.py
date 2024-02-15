@@ -11,17 +11,17 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import RL.utils as utils
+import RL.lstm_model.utils_lstm as utils
 from sklearn.metrics import confusion_matrix
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--directory",
                     type=str,
-                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL",
+                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model",
                     help="Directory for saved models")
 parser.add_argument("--batch_size",
                     type=int,
-                    default=64,
+                    default=16,
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
@@ -179,6 +179,45 @@ def create():
     return x, labels, x1_values, 3
 
 
+def create_n_dim():
+    # Number of points to generate
+    num_points = 2000
+
+    # Generate random x values
+    x1_values = np.random.uniform(low=0, high=30, size=num_points)
+
+    # Create y values based on the decision boundary y=-x with some random noise
+    x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
+
+    # Create labels based on the side of the decision boundary
+    labels = np.where(x2_values > -1 * x1_values, 1, 0)
+    # create numpy of zeros
+    X = np.zeros((num_points, 10))
+    i = 0
+    while i < num_points:
+        # choose random index to assign x1 and x2 values
+        index = np.random.randint(0, 10)
+        # assign x1 to index for 5 samples
+        X[i][index] = x1_values[i]
+        X[i + 1][index] = x1_values[i + 1]
+        X[i + 2][index] = x1_values[i + 2]
+        X[i + 3][index] = x1_values[i + 3]
+        X[i + 4][index] = x1_values[i + 4]
+        # choose random index to assign x2 that is not the same as x1
+        index2 = np.random.randint(0, 10)
+        while index2 == index:
+            index2 = np.random.randint(0, 10)
+        X[i][index2] = x2_values[i]
+        X[i + 1][index2] = x2_values[i + 1]
+        X[i + 2][index2] = x2_values[i + 2]
+        X[i + 3][index2] = x2_values[i + 3]
+        X[i + 4][index2] = x2_values[i + 4]
+        i += 5
+    question_names = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    return X, labels, question_names, 10
+
+
 class Guesser(nn.Module):
     """
     implements a net that guesses the outcome given the state
@@ -189,8 +228,14 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
+
         self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
         self.X, self.y = balance_class(self.X, self.y)
+        # define lstm layer
+        self.layer0 = nn.LSTMCell(input_size=self.features_size, hidden_size=self.features_size)
+        self.initial_c = nn.Parameter(torch.randn(FLAGS.batch_size, self.features_size), requires_grad=True)
+        self.initial_h = nn.Parameter(torch.randn(FLAGS.batch_size, self.features_size), requires_grad=True)
+
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
             torch.nn.PReLU(),
@@ -211,20 +256,33 @@ class Guesser(nn.Module):
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(self.parameters(),
                                           weight_decay=FLAGS.weight_decay,
-                                          lr=FLAGS.lr, )
-        self.path_to_save = os.path.join(os.getcwd(), 'model_robust_guesser')
+                                          lr=FLAGS.lr)
+        self.path_to_save = os.path.join(os.getcwd(), 'model_guesser_lstm')
+
+    def reset_states(self):
+        self.lstm_h = (torch.zeros(1, self.features_size) + self.initial_h)
+        self.lstm_c = (torch.zeros(1, self.features_size) + self.initial_c)
 
     def forward(self, x):
+        if len(x) > 1:
+            self.initial_c = nn.Parameter(torch.randn(len(x), self.features_size), requires_grad=True)
+            self.initial_h = nn.Parameter(torch.randn(len(x), self.features_size), requires_grad=True)
+
+            self.lstm_h = (torch.zeros(len(x), self.features_size) + self.initial_h)
+            self.lstm_c = (torch.zeros(len(x), self.features_size) + self.initial_c)
+            for index in range (self.features_size):
+                answer_encode = torch.zeros(len(x), self.features_size)
+                answer_encode[:,index] = x[:,index]
+                self.lstm_h, self.lstm_c = self.layer0(answer_encode, (self.lstm_h, self.lstm_c))
+            x = self.lstm_h
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-
         logits = self.logits(x)
         if logits.dim() == 2:
             probs = F.softmax(logits, dim=1)
         else:
             probs = F.softmax(logits, dim=-1)
-
         return probs
 
     def _to_variable(self, x: np.ndarray) -> torch.Tensor:
@@ -265,29 +323,17 @@ def mask(input: np.array) -> np.array:
 
 def create_adverserial_input(inputs, labels, pretrained_model):
     input = inputs.view(inputs.shape[0], -1).float()
-
-    # Set requires_grad to True for the input tensor
-    input.requires_grad = True
-
+    input.requires_grad_(True)  # Set requires_grad for input
     # Forward pass
     output = pretrained_model(input)
     labels = torch.Tensor(labels).long()
     loss = pretrained_model.criterion(output, labels)
 
-    # L1 regularization term
-    l1_reg = torch.tensor(0., requires_grad=True)
-    for param in pretrained_model.parameters():
-        l1_reg = l1_reg + torch.norm(param, 1)
+    # Backward pass
+    loss.backward()
 
-    # Add regularization term to the loss
-    loss = loss + 0.001 * l1_reg
-
-    # Compute gradients with respect to input
-    loss.backward(retain_graph=True)
-
-    # Get the gradients with respect to the input
+    # Get the gradients
     gradient = input.grad
-
 
     # Identify the most influential features (those with the largest absolute gradients).
     absolute_gradients = torch.abs(gradient)
@@ -296,7 +342,6 @@ def create_adverserial_input(inputs, labels, pretrained_model):
     # Zero out the most influential features.
     mask = torch.nn.functional.one_hot(max_gradients_indices, num_classes=input.shape[-1]).float()
     zeroed_input_features = input * (1 - mask)
-
     return zeroed_input_features
 
 
@@ -307,6 +352,8 @@ def val(model, val_loader, best_val_auc=0):
     valid_loss = 0
     with torch.no_grad():
         for input, labels in val_loader:
+            if (len (input) < FLAGS.batch_size):
+                break
             input = mask(input)
             input = input.view(input.shape[0], -1)
             input = input.float()
@@ -380,14 +427,7 @@ def train_model(model,
     for i in range(1, nepochs):
         running_loss = 0
         for input, labels in train_loader:
-            # send images and labels and model to adversarial training
-            if i < 50:
-                input = mask(input)
-            else:
-                if i % 2 == 0:
-                    input = create_adverserial_input(input, labels, model)
-                else:
-                    input = mask(input)
+            input = mask(input)
             input = input.view(input.shape[0], -1).float()
             model.train()
             model.optimizer.zero_grad()
@@ -403,8 +443,8 @@ def train_model(model,
             model.optimizer.step()
 
         training_loss_list.append(running_loss / len(train_loader))
-        print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
-        if i % 2 == 0:
+        # print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
+        if i % 5 == 0:
             new_best_val_auc = val(model, val_loader, best_val_auc)
             accuracy_list.append(new_best_val_auc)
             if new_best_val_auc > best_val_auc:
@@ -416,7 +456,7 @@ def train_model(model,
             if val_trials_without_improvement == FLAGS.val_trials_wo_im:
                 print('Did not achieve val AUC improvement for {} trials, training is done.'.format(
                     FLAGS.val_trials_wo_im))
-
+                break
     save_plot_acuuracy_epoch(accuracy_list, training_loss_list)
 
 
@@ -471,6 +511,7 @@ def main():
     :return:
     '''
     model = Guesser()
+    # convert input representation to be lstm
 
     X_train, X_test, y_train, y_test = train_test_split(model.X,
                                                         model.y,
