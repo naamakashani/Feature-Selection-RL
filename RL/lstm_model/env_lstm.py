@@ -50,10 +50,10 @@ class myEnv(gymnasium.Env):
         cost_list = np.array(np.ones(self.guesser.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
 
-        self.lstm = nn.LSTMCell(input_size=self.guesser.features_size+1, hidden_size=self.guesser.features_size)
-        self.initial_c = nn.Parameter(torch.randn(1, self.guesser.features_size), requires_grad=True).to(device=self.device)
-        self.initial_h = nn.Parameter(torch.randn(1, self.guesser.features_size), requires_grad=True).to(device=self.device)
-        self.reset_states()
+        # self.lstm = nn.LSTMCell(input_size=self.guesser.features_size+1, hidden_size=self.guesser.features_size)
+        # self.initial_c = nn.Parameter(torch.randn(1, self.guesser.features_size), requires_grad=True).to(device=self.device)
+        # self.initial_h = nn.Parameter(torch.randn(1, self.guesser.features_size), requires_grad=True).to(device=self.device)
+        # self.reset_states()
 
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
@@ -66,11 +66,11 @@ class myEnv(gymnasium.Env):
                 self.guesser.load_state_dict(guesser_state_dict)
 
     def reset_states(self):
-        self.lstm_h = (torch.zeros(1, self.guesser.features_size) + self.initial_h).to(device=self.device)
-        self.lstm_c = (torch.zeros(1, self.guesser.features_size) + self.initial_c).to(device=self.device)
+        self.lstm_h = (torch.zeros(1, self.guesser.features_size) + self.guesser.initial_h).to(device=self.device)
+        self.lstm_c = (torch.zeros(1, self.guesser.features_size) + self.guesser.initial_c).to(device=self.device)
 
     def next_lstm_state(self, answer_encode):
-        self.lstm_h, self.lstm_c = self.lstm(answer_encode, (self.lstm_h, self.lstm_c))
+        self.lstm_h, self.lstm_c = self.guesser.layer0(answer_encode, (self.lstm_h, self.lstm_c))
         return self.lstm_h.data.cpu().numpy()
 
     def reset(self,
@@ -156,7 +156,7 @@ class myEnv(gymnasium.Env):
             elif mode == 'test':
                 answer = self.X_test[self.patient, action]
 
-            answer_encode = torch.zeros(1, self.guesser.features_size +1).to(device=self.device)
+            answer_encode = torch.zeros(1, self.guesser.features_size).to(device=self.device)
             answer_encode[0, action] = answer
             next_state= self.next_lstm_state(answer_encode)
             self.reward = self.prob_guesser(next_state) - self.prob_guesser(prev_state)

@@ -275,12 +275,12 @@ def create_adverserial_input(inputs, labels, pretrained_model):
     loss = pretrained_model.criterion(output, labels)
 
     # L1 regularization term
-    l1_reg = torch.tensor(0., requires_grad=True)
-    for param in pretrained_model.parameters():
-        l1_reg = l1_reg + torch.norm(param, 1)
-
-    # Add regularization term to the loss
-    loss = loss + 0.001 * l1_reg
+    # l1_reg = torch.tensor(0., requires_grad=True)
+    # for param in pretrained_model.parameters():
+    #     l1_reg = l1_reg + torch.norm(param, 1)
+    #
+    # # Add regularization term to the loss
+    # loss = loss + 0.001 * l1_reg
 
     # Compute gradients with respect to input
     loss.backward(retain_graph=True)
@@ -381,7 +381,7 @@ def train_model(model,
         running_loss = 0
         for input, labels in train_loader:
             # send images and labels and model to adversarial training
-            if i < 50:
+            if i < 100:
                 input = mask(input)
             else:
                 if i % 2 == 0:
@@ -413,9 +413,9 @@ def train_model(model,
             else:
                 val_trials_without_improvement += 1
             # check whether to stop training
-            if val_trials_without_improvement == FLAGS.val_trials_wo_im:
-                print('Did not achieve val AUC improvement for {} trials, training is done.'.format(
-                    FLAGS.val_trials_wo_im))
+            # if val_trials_without_improvement == FLAGS.val_trials_wo_im:
+            #     print('Did not achieve val AUC improvement for {} trials, training is done.'.format(
+            #         FLAGS.val_trials_wo_im))
 
     save_plot_acuuracy_epoch(accuracy_list, training_loss_list)
 

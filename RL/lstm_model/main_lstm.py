@@ -12,15 +12,15 @@ from PrioritiziedReplayMemory_lstm import *
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--save_dir",
                     type=str,
-                    default='ddqn_models',
+                    default='C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model\\ddqn_models',
                     help="Directory for saved models")
 parser.add_argument("--save_guesser_dir",
                     type=str,
-                    default='C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\model_guesser_lstm',
+                    default='C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model\\model_guesser_lstm',
                     help="Directory for saved guesser model")
 parser.add_argument("--directory",
                     type=str,
-                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model",
+                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model\\",
                     help="Directory for saved models")
 parser.add_argument("--gamma",
                     type=float,
@@ -32,7 +32,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=15,
+                    default=5,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -80,7 +80,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=20,
+                    default=15,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -553,10 +553,6 @@ def main():
     i = 0
     rewards_list = []
     steps = []
-
-    
-
-
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
         # if i % (2 * FLAGS.ep_per_trainee) == 0:
         #     train_dqn = False
@@ -593,21 +589,17 @@ def main():
             agent.update_target_dqn()
         i += 1
 
-
-
-
-
     acc ,intersect,unoin = test(env, agent, input_dim, output_dim)
     steps = np.mean(steps)
-    show_sample_paths(6, env, agent)
+    # show_sample_paths(6, env, agent)
+    print ('Final accuracy: ', acc)
+    print ('Final intersect: ', intersect)
+    print ('Final union: ', unoin)
+    print ('Final steps: ', steps)
+    print('num iterations: ', i)
     return acc, steps, i, intersect, unoin
 
-    # save_plot_acuuracy_epoch(val_list)
-    # save_plot_reward_epoch(rewards_list)
-    # check the avergae number of steps
-    #
-    # save_plot_step_epoch(steps)
-    # show_sample_paths(6, env, agent)
+
 
 
 if __name__ == '__main__':

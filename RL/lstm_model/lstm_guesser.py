@@ -233,8 +233,9 @@ class Guesser(nn.Module):
         self.X, self.y = balance_class(self.X, self.y)
         # define lstm layer
         self.layer0 = nn.LSTMCell(input_size=self.features_size, hidden_size=self.features_size)
-        self.initial_c = nn.Parameter(torch.randn(FLAGS.batch_size, self.features_size), requires_grad=True)
-        self.initial_h = nn.Parameter(torch.randn(FLAGS.batch_size, self.features_size), requires_grad=True)
+        self.initial_c = nn.Parameter(torch.randn(1, self.features_size), requires_grad=True)
+        self.initial_h = nn.Parameter(torch.randn(1, self.features_size), requires_grad=True)
+
 
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
@@ -259,22 +260,22 @@ class Guesser(nn.Module):
                                           lr=FLAGS.lr)
         self.path_to_save = os.path.join(os.getcwd(), 'model_guesser_lstm')
 
-    def reset_states(self):
-        self.lstm_h = (torch.zeros(1, self.features_size) + self.initial_h)
-        self.lstm_c = (torch.zeros(1, self.features_size) + self.initial_c)
+
 
     def forward(self, x):
         if len(x) > 1:
-            self.initial_c = nn.Parameter(torch.randn(len(x), self.features_size), requires_grad=True)
-            self.initial_h = nn.Parameter(torch.randn(len(x), self.features_size), requires_grad=True)
+            samples = []
+            self.initial_c = nn.Parameter(torch.randn(1, self.features_size), requires_grad=True)
+            self.initial_h = nn.Parameter(torch.randn(1, self.features_size), requires_grad=True)
+            for sample in x:
+                self.lstm_h = (torch.zeros(1, self.features_size) + self.initial_h)
+                self.lstm_c = (torch.zeros(1, self.features_size) + self.initial_c)
+                sample = sample.unsqueeze(0)
+                self.lstm_h, self.lstm_c = self.layer0(sample, (self.lstm_h, self.lstm_c))
+                sample = self.lstm_h
+                samples.append(sample)
+            x = torch.stack(samples).squeeze()
 
-            self.lstm_h = (torch.zeros(len(x), self.features_size) + self.initial_h)
-            self.lstm_c = (torch.zeros(len(x), self.features_size) + self.initial_c)
-            for index in range (self.features_size):
-                answer_encode = torch.zeros(len(x), self.features_size)
-                answer_encode[:,index] = x[:,index]
-                self.lstm_h, self.lstm_c = self.layer0(answer_encode, (self.lstm_h, self.lstm_c))
-            x = self.lstm_h
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -352,7 +353,7 @@ def val(model, val_loader, best_val_auc=0):
     valid_loss = 0
     with torch.no_grad():
         for input, labels in val_loader:
-            if (len (input) < FLAGS.batch_size):
+            if (len(input) < FLAGS.batch_size):
                 break
             input = mask(input)
             input = input.view(input.shape[0], -1)
