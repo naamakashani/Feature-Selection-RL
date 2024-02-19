@@ -25,7 +25,7 @@ parser.add_argument("--batch_size",
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=5000,
+                    default=50,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
@@ -45,7 +45,7 @@ parser.add_argument("--weight_decay",
                     help="l_2 weight penalty")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=5000,
+                    default=5,
                     help="Number of validation trials without improvement")
 
 
@@ -221,11 +221,11 @@ class Guesser(nn.Module):
 
     def __init__(self,
                  hidden_dim1=FLAGS.hidden_dim1, hidden_dim2=FLAGS.hidden_dim2,
-                 num_classes=2):
+                 num_classes=10):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
-        self.X, self.y = balance_class(self.X, self.y)
+        self.X, self.y, self.question_names, self.features_size = utils.load_mnist_data()
+        # self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
             torch.nn.PReLU(),
@@ -430,7 +430,7 @@ def train_model(model,
 
         training_loss_list.append(running_loss / len(train_loader))
         # print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
-        if i % 20 == 0:
+        if i % 5 == 0:
             new_best_val_auc = val(model, val_loader, best_val_auc)
             accuracy_list.append(new_best_val_auc)
             if new_best_val_auc > best_val_auc:

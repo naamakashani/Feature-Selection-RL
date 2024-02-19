@@ -18,7 +18,7 @@ parser.add_argument("--save_dir",
                     help="Directory for saved models")
 parser.add_argument("--save_guesser_dir",
                     type=str,
-                    default='model_robust_guesser',
+                    default='model_guesser',
                     help="Directory for saved guesser model")
 parser.add_argument("--directory",
                     type=str,

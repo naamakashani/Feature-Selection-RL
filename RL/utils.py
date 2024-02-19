@@ -17,6 +17,20 @@ import pandas as pd
 import torch
 from sklearn.utils import resample
 
+def load_mnist_data():
+    # read npy file
+    train_x = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\mnist_check\\X_train.npy"
+    X_train = np.load(train_x)
+    test_x= "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\mnist_check\\X_test.npy"
+    X_test = np.load(test_x)
+    y_train = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\mnist_check\\y_train.npy"
+    y_train = np.load(y_train)
+    y_test = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\mnist_check\\y_test.npy"
+    y_test = np.load(y_test)
+    #combine X_train and X_test
+    X = np.concatenate((X_train, X_test), axis=0)
+    y = np.concatenate((y_train, y_test), axis=0)
+    return X, y,y, len(X[0])
 
 def load_data_labels():
     # filter_preprocess_X()
@@ -39,7 +53,7 @@ def load_data_labels():
     X = X.astype('float32')
     Y = Y.astype('int')
     Y = Y.reshape(-1)
-    return X, Y, X_pd.columns.tolist(), len(X_pd.columns)
+    return X, Y, X_pd.columns, len(X_pd.columns)
 
 
 def load_data_labels_cut():

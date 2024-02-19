@@ -55,7 +55,7 @@ class myEnv(gymnasium.Env):
         self.action_probs = torch.from_numpy(np.array(cost_list))
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
-            save_dir = os.path.join(os.getcwd(), 'model_robust_guesser')
+            save_dir = os.path.join(os.getcwd(), 'model_guesser')
             guesser_filename = 'best_guesser.pth'
             guesser_load_path = os.path.join(save_dir, guesser_filename)
             if os.path.exists(guesser_load_path):
@@ -165,7 +165,7 @@ class myEnv(gymnasium.Env):
                 self.guesser.optimizer.zero_grad()
                 self.guesser.train(mode=True)
                 y_tensor = torch.tensor([int(y_true)])
-                y_true_tensor = F.one_hot(y_tensor, num_classes=2).squeeze()
+                y_true_tensor = F.one_hot(y_tensor, num_classes=10).squeeze()
                 self.probs = self.probs.float()
                 y_true_tensor = y_true_tensor.float()
                 self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)
