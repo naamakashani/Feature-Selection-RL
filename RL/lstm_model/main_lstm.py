@@ -32,7 +32,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=5,
+                    default=50,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -80,7 +80,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=15,
+                    default=500,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -132,7 +132,7 @@ def calculate_td_error(state, action, reward, next_state, done, agent, gamma):
     return td_error.item()
 
 
-def play_episode(env,
+def play_episode(epoch,env,
                  agent: Agent,
                   priorityRM: PrioritizedReplayMemory,
                  eps: float,
@@ -155,9 +155,9 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim /5:
+    while not done and t < agent.input_dim -2:
         a = agent.get_action(s, env, eps, mask, mode)
-        next_state, r, done, info = env.step(a, mask)
+        next_state, r, done, info = env.step(a, mask,eps)
         # if r < 0:
         # done = True
         mask[a] = 0
@@ -165,7 +165,7 @@ def play_episode(env,
         td = calculate_td_error(s, a, r, next_state, done, agent, FLAGS.gamma)
         priorityRM.push(s, a, r, next_state, done, td)
         if len(priorityRM) > batch_size:
-            if train_dqn:
+            if train_dqn and epoch > 1000:
                 minibatch, indices, weights = priorityRM.pop(batch_size)
                 td_errors = []
                 for transition, weight in zip(minibatch, weights):
@@ -366,7 +366,7 @@ def test(env, agent, input_dim, output_dim):
                 action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
             mask[action] = 0
             # take the action
-            state, reward, done, guess = env.step(action, mask, mode='test')
+            state, reward, done, guess = env.step(action, mask, -1,mode='test')
 
             if guess != -1:
                 y_hat_test[i] = env.guess
@@ -374,7 +374,7 @@ def test(env, agent, input_dim, output_dim):
 
         if guess == -1:
             a = agent.output_dim - 1
-            s2, r, done, info = env.step(a, mask)
+            s2, r, done, info = env.step(a, mask,-1,mode='test')
             y_hat_test[i] = env.guess
             total_steps += number_of_steps
             # create list of all the masks
@@ -503,14 +503,14 @@ def val(i_episode: int,
 
             mask[action] = 0
             # take the action
-            state, reward, done, guess = env.step(action, mask, mode='val')
+            state, reward, done, guess = env.step(action, mask, -1, mode='val')
             if guess != -1:
                 y_hat_val[i] = guess
             t += 1
 
         if guess == -1:
             a = agent.output_dim - 1
-            s2, r, done, info = env.step(a, mask)
+            s2, r, done, info = env.step(a, mask, -1, mode='val')
             y_hat_val[i] = env.guess
             # create list of all the masks
         mask_list.append(mask)
@@ -563,7 +563,7 @@ def main():
 
         eps = epsilon_annealing(FLAGS.initial_epsilon, FLAGS.min_epsilon, FLAGS.anneal_steps, i)
         # play an episode
-        reward, t = play_episode(env,
+        reward, t = play_episode(i,env,
                                  agent,
                                  priorityRP,
                                  eps,
@@ -572,7 +572,7 @@ def main():
                                  train_guesser=train_guesser, mode='training')
         rewards_list.append(reward)
         steps.append(t)
-        if i % FLAGS.val_interval == 0:
+        if i % FLAGS.val_interval == 0 and i >1000:
             # compute performance on validation set
             new_best_val_acc = val(i_episode=i,
                                    best_val_acc=best_val_acc, env=env, agent=agent)
