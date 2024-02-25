@@ -39,10 +39,10 @@ parser.add_argument("--val_trials_wo_im",
 
 FLAGS = parser.parse_args(args=[])
 
-class state(nn.Module):
+class State(nn.Module):
 
     def __init__(self, features_size, device):
-        super(state, self).__init__()
+        super(State, self).__init__()
         self.device = device
         self.features_size = features_size
         self.lstm = nn.LSTMCell(input_size=self.features_size, hidden_size=self.features_size)

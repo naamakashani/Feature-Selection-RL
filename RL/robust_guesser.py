@@ -288,7 +288,6 @@ def create_adverserial_input(inputs, labels, pretrained_model):
     # Get the gradients with respect to the input
     gradient = input.grad
 
-
     # Identify the most influential features (those with the largest absolute gradients).
     absolute_gradients = torch.abs(gradient)
     max_gradients_indices = torch.argmax(absolute_gradients, dim=-1)
@@ -381,13 +380,11 @@ def train_model(model,
         running_loss = 0
         for input, labels in train_loader:
             # send images and labels and model to adversarial training
-            if i < 100:
-                input = mask(input)
+            if i > 100 and i < 120:
+                input = create_adverserial_input(input, labels, model)
             else:
-                if i % 2 == 0:
-                    input = create_adverserial_input(input, labels, model)
-                else:
-                    input = mask(input)
+                input = mask(input)
+
             input = input.view(input.shape[0], -1).float()
             model.train()
             model.optimizer.zero_grad()

@@ -14,11 +14,11 @@ from PrioritiziedReplayMemory import *
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--save_dir",
                     type=str,
-                    default='ddqn_models',
+                    default='ddqn_robust_models',
                     help="Directory for saved models")
 parser.add_argument("--save_guesser_dir",
                     type=str,
-                    default='model_guesser',
+                    default='model_robust_guesser',
                     help="Directory for saved guesser model")
 parser.add_argument("--directory",
                     type=str,

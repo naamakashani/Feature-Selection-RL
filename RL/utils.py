@@ -17,6 +17,46 @@ import pandas as pd
 import torch
 from sklearn.utils import resample
 
+def add_noise(X, noise_std=0.01):
+    """
+    Add Gaussian noise to the input features.
+
+    Parameters:
+    - X: Input features (numpy array).
+    - noise_std: Standard deviation of the Gaussian noise.
+
+    Returns:
+    - X_noisy: Input features with added noise.
+    """
+    noise = np.random.normal(loc=0, scale=noise_std, size=X.shape)
+    X_noisy = X + noise
+    return X_noisy
+def balance_class(X, y, noise_std=0.01):
+    unique_classes, class_counts = np.unique(y, return_counts=True)
+    minority_class = unique_classes[np.argmin(class_counts)]
+    majority_class = unique_classes[np.argmax(class_counts)]
+
+    # Get indices of samples belonging to each class
+    minority_indices = np.where(y == minority_class)[0]
+    majority_indices = np.where(y == majority_class)[0]
+
+    # Calculate the difference in sample counts
+    minority_count = len(minority_indices)
+    majority_count = len(majority_indices)
+    count_diff = majority_count - minority_count
+
+    # Add noise to the features of the minority class to balance the dataset
+    if count_diff > 0:
+        # Randomly sample indices from the minority class to add noise
+        noisy_indices = np.random.choice(minority_indices, count_diff, replace=True)
+        # Add noise to the features of the selected samples
+        X_balanced = np.concatenate([X, add_noise(X[noisy_indices], noise_std)], axis=0)
+        y_balanced = np.concatenate([y, y[noisy_indices]], axis=0)
+    else:
+        X_balanced = X.copy()  # No need for balancing, as classes are already balanced
+        y_balanced = y.copy()
+    return X_balanced, y_balanced
+
 def load_mnist_data():
     # read npy file
     train_x = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\mnist_check\\X_train.npy"

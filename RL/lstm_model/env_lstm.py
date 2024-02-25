@@ -15,9 +15,10 @@ class myEnv(gymnasium.Env):
                  device):
 
         self.device = device
-        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
+        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
+        self.X, self.y = utils.balance_class(self.X, self.y)
         self.guesser = Guesser(self.features_size)
-        self.state = state(self.features_size, self.device)
+        self.state = State(self.features_size, self.device)
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y,
                                                                                 test_size=0.3)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
@@ -107,7 +108,7 @@ class myEnv(gymnasium.Env):
             elif mode == 'test':
                 answer = self.X_test[self.patient, action]
             answer_encode = torch.zeros(1, self.guesser.features_size).to(device=self.device)
-            answer_encode[0, action] = answer
+            answer_encode[0, action] = torch.tensor(answer, dtype=torch.float32)
             next_state = self.state(answer_encode)
 
             next_state = torch.autograd.Variable(torch.Tensor(next_state))
@@ -117,6 +118,7 @@ class myEnv(gymnasium.Env):
             y_tensor = torch.tensor([int(y_true)])
             y_true_tensor = F.one_hot(y_tensor, num_classes=2)
             self.probs = probs.float()
+            self.probs = F.softmax(self.probs, dim=1)
             y_true_tensor = y_true_tensor.float()
             self.loss = self.criterion(self.probs, y_true_tensor)
             self.loss.backward()
