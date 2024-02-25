@@ -15,10 +15,13 @@ class myEnv(gymnasium.Env):
                  device):
 
         self.device = device
+        self.embedding_dim=10
         self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
         self.X, self.y = utils.balance_class(self.X, self.y)
-        self.guesser = Guesser(self.features_size)
-        self.state = State(self.features_size, self.device)
+        self.guesser = Guesser(self.embedding_dim*2)
+
+        self.question_embedding = nn.Embedding(self.features_size,self.embedding_dim)
+        self.state = State(self.features_size, self.embedding_dim, self.device)
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y,
                                                                                 test_size=0.3)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
@@ -29,6 +32,8 @@ class myEnv(gymnasium.Env):
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer_guesser = optim.Adam(self.guesser.parameters(), lr=flags.lr)
         self.optimizer_state = optim.Adam(self.state.parameters(), lr=flags.lr)
+        self.optimizer_embedding = optim.Adam(self.question_embedding.parameters(), lr=flags.lr)
+
 
     def reset(self,
               mode='training',
@@ -107,9 +112,15 @@ class myEnv(gymnasium.Env):
                 answer = self.X_val[self.patient, action]
             elif mode == 'test':
                 answer = self.X_test[self.patient, action]
-            answer_encode = torch.zeros(1, self.guesser.features_size).to(device=self.device)
-            answer_encode[0, action] = torch.tensor(answer, dtype=torch.float32)
-            next_state = self.state(answer_encode)
+
+            question_embedding = self.question_embedding(torch.tensor(action))
+            question_embedding = question_embedding.to(device=self.device)
+            next_state = self.state(question_embedding,answer)
+
+            # answer_encode = torch.zeros(1, self.guesser.features_size).to(device=self.device)
+            #
+            # answer_encode[0, action] = torch.tensor(answer, dtype=torch.float32)
+            # next_state = self.state(answer_encode)
 
             next_state = torch.autograd.Variable(torch.Tensor(next_state))
             next_state = next_state.float()
@@ -126,6 +137,8 @@ class myEnv(gymnasium.Env):
                 if np.random.rand() > eps:
                     self.optimizer_state.step()
                     self.optimizer_state.zero_grad()
+                    self.optimizer_embedding.step()
+                    self.optimizer_embedding.zero_grad()
                 else:
                     self.optimizer_guesser.step()
                     self.optimizer_guesser.zero_grad()
