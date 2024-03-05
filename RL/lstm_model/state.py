@@ -63,9 +63,6 @@ class State(nn.Module):
         answer_vec = torch.unsqueeze(torch.ones(self.embedding_dim) * answer, 0)
         question_embedding = question_encode.to(device=self.device)
         answer_vec = answer_vec.to(device=self.device)
-        answer_vec=answer_vec.squeeze()
-        x = torch.cat((question_embedding,answer_vec), dim=0)
-        x=x.unsqueeze(0)
-
+        x = torch.cat((question_embedding,answer_vec), dim=1)
         self.lstm_h, self.lstm_c = self.lstm(x, (self.lstm_h, self.lstm_c))
         return self.lstm_h.data.cpu().numpy()

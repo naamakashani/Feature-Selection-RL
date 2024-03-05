@@ -27,7 +27,7 @@ class myEnv(gymnasium.Env):
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
                                                                               self.y_train,
                                                                               test_size=0.05)
-        cost_list = np.array(np.ones(self.guesser.features_size + 1))
+        cost_list = np.array(np.ones(self.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer_guesser = optim.Adam(self.guesser.parameters(), lr=flags.lr)
@@ -63,7 +63,7 @@ class myEnv(gymnasium.Env):
         to the q values, so that questions that were already
         asked will not be asked again.
         """
-        mask = torch.ones(self.guesser.features_size + 1)
+        mask = torch.ones(self.features_size + 1)
         mask = mask.to(device=self.device)
         return mask
 
@@ -80,7 +80,7 @@ class myEnv(gymnasium.Env):
         self.reward = self.compute_reward(mode)
 
         self.time += 1
-        if self.time == self.guesser.features_size:
+        if self.time == self.features_size:
             self.terminate_episode()
 
         return self.s, self.reward, self.done, self.guess
@@ -91,7 +91,7 @@ class myEnv(gymnasium.Env):
 
     def prob_guesser(self, state):
         guesser_input = torch.Tensor(
-            state[:self.guesser.features_size])
+            state[:self.features_size])
         if torch.cuda.is_available():
             guesser_input = guesser_input.cuda()
         self.guesser.train(mode=False)
@@ -102,26 +102,37 @@ class myEnv(gymnasium.Env):
         self.correct_prob = self.probs[0, class_index].item()
         return self.correct_prob
 
+    def print_parametrs(self):
+        # Print parameters of guesser after optimization step
+        print("\nGuesser parameters after optimization step:")
+        for param_name, param in self.guesser.named_parameters():
+            print(param_name, param)
+
+        # Print parameters of state after optimization step
+        print("\nState parameters after optimization step:")
+        for param_name, param in self.state.named_parameters():
+            print(param_name, param)
+
+        # Print parameters of question_embedding after optimization step
+        print("\nQuestion Embedding parameters after optimization step:")
+        for param_name, param in self.question_embedding.named_parameters():
+            print(param_name, param)
+
     def update_state(self, action, mode, mask, eps):
         prev_state = self.s
 
-        if action < self.guesser.features_size:  # Not making a guess
+        if action < self.features_size:  # Not making a guess
             if mode == 'training':
                 answer = self.X_train[self.patient, action]
             elif mode == 'val':
                 answer = self.X_val[self.patient, action]
             elif mode == 'test':
                 answer = self.X_test[self.patient, action]
-
-            question_embedding = self.question_embedding(torch.tensor(action))
+            ind = torch.LongTensor([action]).to(device=self.device)
+            question_embedding = self.question_embedding(ind)
             question_embedding = question_embedding.to(device=self.device)
+
             next_state = self.state(question_embedding,answer)
-
-            # answer_encode = torch.zeros(1, self.guesser.features_size).to(device=self.device)
-            #
-            # answer_encode[0, action] = torch.tensor(answer, dtype=torch.float32)
-            # next_state = self.state(answer_encode)
-
             next_state = torch.autograd.Variable(torch.Tensor(next_state))
             next_state = next_state.float()
             probs = self.guesser(next_state)
@@ -134,14 +145,13 @@ class myEnv(gymnasium.Env):
             self.loss = self.criterion(self.probs, y_true_tensor)
             self.loss.backward()
             if eps >= 0:
-                if np.random.rand() > eps:
                     self.optimizer_state.step()
                     self.optimizer_state.zero_grad()
                     self.optimizer_embedding.step()
                     self.optimizer_embedding.zero_grad()
-                else:
                     self.optimizer_guesser.step()
                     self.optimizer_guesser.zero_grad()
+
             self.reward = self.prob_guesser(next_state) - self.prob_guesser(prev_state)
             self.guess = -1
             self.done = False

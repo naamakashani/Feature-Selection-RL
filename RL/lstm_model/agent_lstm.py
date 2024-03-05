@@ -117,7 +117,7 @@ class Agent(object):
         Returns:
             torch.FloatTensor: 2-D Tensor of shape (n, output_dim)
         """
-        states = self._to_variable(states.reshape(-1, self.input_dim))
+        states = self._to_variable(states)
         states = states.to(device=device)
         self.dqn.train(mode=False)
         return self.dqn(states)

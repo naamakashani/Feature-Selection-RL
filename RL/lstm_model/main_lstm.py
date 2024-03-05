@@ -81,7 +81,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=500,
+                    default=1000,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -156,7 +156,7 @@ def play_episode(epoch, env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim / 4:
+    while not done and t < env.features_size / 4:
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask, eps)
         # if r < 0:
@@ -190,7 +190,7 @@ def get_env_dim(env) -> Tuple[int, int]:
         int: output_dim
     """
     input_dim = env.guesser.features_size
-    output_dim = env.guesser.features_size + 1
+    output_dim = env.features_size + 1
 
     return input_dim, output_dim
 
@@ -242,14 +242,20 @@ def save_networks(i_episode: int, env, agent,
         guesser_filename = 'best_guesser.pth'
         dqn_filename = 'best_dqn.pth'
         state_filename = 'best_state.pth'
+        embedding_filename= 'best_embed.pth'
+
     else:
         guesser_filename = '{}_{}_{:1.3f}.pth'.format(i_episode, 'guesser', val_acc)
         dqn_filename = '{}_{}_{:1.3f}.pth'.format(i_episode, 'dqn', val_acc)
         state_filename = '{}_{}_{:1.3f}.pth'.format(i_episode, 'state', val_acc)
+        embedding_filename = '{}_{}_{:1.3f}.pth'.format(i_episode, 'embed', val_acc)
+
+
 
     guesser_save_path = os.path.join(FLAGS.save_dir, guesser_filename)
     dqn_save_path = os.path.join(FLAGS.save_dir, dqn_filename)
     state_save_path = os.path.join(FLAGS.save_dir, state_filename)
+    embed_save_path = os.path.join(FLAGS.save_dir, embedding_filename)
 
     # save guesser
     if os.path.exists(guesser_save_path):
@@ -271,6 +277,11 @@ def save_networks(i_episode: int, env, agent,
     torch.save(env.state.cpu().state_dict(), state_save_path + '~')
     os.rename(state_save_path + '~', state_save_path)
 
+    # save state
+    if os.path.exists(embed_save_path):
+        os.remove(embed_save_path)
+    torch.save(env.question_embedding.cpu().state_dict(), embed_save_path + '~')
+    os.rename(embed_save_path + '~', embed_save_path)
 
 def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
                   val_acc=None) -> None:
@@ -289,7 +300,7 @@ def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
     state_load_path = os.path.join(FLAGS.save_dir, state_filename)
 
     # load guesser
-    guesser = Guesser(env.features_size)
+    guesser = Guesser(env.guesser.features_size)
     guesser_state_dict = torch.load(guesser_load_path)
     guesser.load_state_dict(guesser_state_dict)
     guesser.to(device=device)
@@ -301,7 +312,7 @@ def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
     dqn.to(device=device)
 
     # load state
-    my_state = State(env.features_size, env.device)
+    my_state = State(env.features_size, env.embedding_dim,env.device)
     state_state_dict = torch.load(state_load_path)
     my_state.load_state_dict(state_state_dict)
     my_state.to(device=device)
@@ -367,7 +378,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim / 4 and not done:
+        while t < env.features_size / 4 and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -449,7 +460,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(agent.input_dim / 4)):
+        for t in range(int(env.features_size / 4)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -500,7 +511,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim / 4 and not done:
+        while t < env.features_size / 4 and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
