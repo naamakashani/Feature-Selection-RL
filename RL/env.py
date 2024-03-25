@@ -5,7 +5,6 @@ import gymnasium
 import torch
 from RL.guesser import Guesser
 import torch.nn.functional as F
-import math
 
 
 
@@ -125,7 +124,7 @@ class myEnv(gymnasium.Env):
         self.guesser.train(mode=False)
         self.probs = self.guesser(guesser_input)
         self.guess = torch.argmax(self.probs).item()
-        self.correct_prob = self.probs[self.y_train[self.patient]].item()
+        self.correct_prob = self.probs[int(self.y_train[self.patient])].item()
         return self.correct_prob
 
     def update_state(self, action, mode, mask):

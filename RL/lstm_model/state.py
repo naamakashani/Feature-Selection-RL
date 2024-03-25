@@ -1,44 +1,6 @@
-import gymnasium
 from agent_lstm import *
 from RL.lstm_model.lstm_guesser import *
 
-import torch.nn.functional as F
-
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("--directory",
-                    type=str,
-                    default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model",
-                    help="Directory for saved models")
-parser.add_argument("--batch_size",
-                    type=int,
-                    default=16,
-                    help="Mini-batch size")
-parser.add_argument("--num_epochs",
-                    type=int,
-                    default=200,
-                    help="number of epochs")
-parser.add_argument("--hidden-dim1",
-                    type=int,
-                    default=64,
-                    help="Hidden dimension")
-parser.add_argument("--hidden-dim2",
-                    type=int,
-                    default=128,
-                    help="Hidden dimension")
-parser.add_argument("--lr",
-                    type=float,
-                    default=1e-4,
-                    help="Learning rate")
-parser.add_argument("--weight_decay",
-                    type=float,
-                    default=0.001,
-                    help="l_2 weight penalty")
-parser.add_argument("--val_trials_wo_im",
-                    type=int,
-                    default=20,
-                    help="Number of validation trials without improvement")
-
-FLAGS = parser.parse_args(args=[])
 
 
 class State(nn.Module):

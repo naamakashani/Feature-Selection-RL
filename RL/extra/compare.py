@@ -42,17 +42,17 @@ def decision_tree():
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
-    print(f"Accuracy: {accuracy}")
+    print(f"Accuracy DT: {accuracy}")
     print(clf.get_depth())
-    print(f"Number of features: {number_of_features}")
+
     selected_paths = get_selected_features(clf.tree_, X_test)
 
     # Calculate intersection and union of selected paths
     intersection = set.intersection(*selected_paths)
     union = set.union(*selected_paths)
 
-    print("Intersection of selected paths:", intersection)
-    print("Union of selected paths:", union)
+    print("Intersection of selected paths DT:", intersection)
+    print("Union of selected paths DT:", union)
 
 
 
@@ -118,39 +118,10 @@ def XGboost():
     return accuracy
 
 
-def cut_decition_tree_():
-    X, y, _, number_of_features = utils.load_data_labels()
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    clf = DecisionTreeClassifier(max_depth=1)  # You can specify hyperparameters here
-    clf.fit(X_train, y_train)
-    # check depth
-    print(clf.get_depth())
-    # print the feature that chosen
-    print(clf.tree_.feature)
-    y_pred = clf.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f"Accuracy: {accuracy}")
 
 
-def cut_decision_tree():
-    # Split the data into training and testing sets (80% train, 20% test)
-    X, y, _, number_of_features = utils.load_diabetes()
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
 
-    # Create a decision tree classifier with a maximum depth of 2 features
-    tree_classifier = DecisionTreeClassifier(max_depth=2)
-
-    # Train the decision tree classifier on the training data
-    tree_classifier.fit(X_train, y_train)
-    # print the depth of the tree
-
-    # Predict using the trained model on the test set
-    y_pred = tree_classifier.predict(X_test)
-
-    # Calculate accuracy
-    accuracy = accuracy_score(y_test, y_pred)
-    return accuracy, tree_classifier.get_depth()
 
 
 def knn():
@@ -200,7 +171,7 @@ def get_selected_features_xgboost(model, threshold):
 
 
 def XGboost_new():
-    X, y, _, number_of_features = utils.load_diabetes()
+    X, y, _, number_of_features = utils.load_ehr()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dtest = xgb.DMatrix(X_test, label=y_test)
@@ -220,38 +191,20 @@ def XGboost_new():
 
     # Get selected features based on feature importance
     selected_features = get_selected_features_xgboost(model, threshold)
-    return accuracy, selected_features
-
-
-
+    print( "XGBOOST ACCURACY")
+    print(accuracy)
 
 
 def main():
-    sum = 0
-    sum_depth = 0
-    for i in range(10):
-        acc, depth = cut_decision_tree()
-        sum += acc
-        sum_depth += depth
-    print(sum / 10)
-    print (sum_depth / 10)
+    XGboost_new()
+    decision_tree()
+
+
+
 
 
 if __name__ == "__main__":
     os.chdir("C:\\Users\\kashann\\PycharmProjects\\RLadaptive\\RL\\")
-    decision_tree()
+    main()
 
 
-    # Calculate intersection and union with previously calculated selected paths
-    # Call the XGboost function
-    accuracy_xgboost, selected_features_xgboost = XGboost_new()
-
-    # Calculate intersection and union with previously calculated selected paths (if available)
-    intersection = set(selected_features_xgboost).intersection(*selected_features_xgboost)
-    union = set(selected_features_xgboost).union(*selected_features_xgboost)
-
-    print("Intersection of selected features from XGBoost:", intersection)
-    print("Union of selected features from XGBoost:", union)
-
-    print("Intersection of selected features from XGBoost and Decision Tree:", intersection)
-    print("Union of selected features from XGBoost and Decision Tree:", union)

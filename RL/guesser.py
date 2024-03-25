@@ -25,7 +25,7 @@ parser.add_argument("--batch_size",
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=5000,
+                    default=10000,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
@@ -45,33 +45,11 @@ parser.add_argument("--weight_decay",
                     help="l_2 weight penalty")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=50,
+                    default=100,
                     help="Number of validation trials without improvement")
 
 
 FLAGS = parser.parse_args(args=[])
-
-
-def add_noise(X, noise_std=0.01):
-    """
-    Add Gaussian noise to the input features.
-
-    Parameters:
-    - X: Input features (numpy array).
-    - noise_std: Standard deviation of the Gaussian noise.
-
-    Returns:
-    - X_noisy: Input features with added noise.
-
-    X_noisy = X.copy()
-    X_noisy= pd.DataFrame(X_noisy)
-    for col in X_noisy.columns:
-        categories = X_noisy[col].cat.categories
-        noise = np.random.randint(-1, 2, size=len(X))
-        X_noisy[col] = (X_noisy[col].cat.codes + noise) % len(categories)
-        X_noisy[col] = X_noisy[col].astype('category').cat.set_categories(categories)
-    return X_noisy
-    """
 
 
 def add_noise(X, noise_std=0.01):
@@ -90,31 +68,7 @@ def add_noise(X, noise_std=0.01):
     return X_noisy
 
 
-def balance_class_multi(X, y, noise_std=0.01):
-    unique_classes, class_counts = np.unique(y, return_counts=True)
-    max_class_count = np.max(class_counts)
 
-    # Calculate the difference in sample counts for each class
-    count_diff = max_class_count - class_counts
-
-    # Initialize arrays to store balanced data
-    X_balanced = X.copy()
-    y_balanced = y.copy()
-
-    # Add noise to the features of the minority classes to balance the dataset
-    for minority_class, diff in zip(unique_classes, count_diff):
-        if diff > 0:
-            # Get indices of samples belonging to the current minority class
-            minority_indices = np.where(y == minority_class)[0]
-
-            # Randomly sample indices from the minority class to add noise
-            noisy_indices = np.random.choice(minority_indices, diff, replace=True)
-
-            # Add noise to the features of the selected samples
-            X_balanced = np.concatenate([X_balanced, add_noise(X[noisy_indices], noise_std)], axis=0)
-            y_balanced = np.concatenate([y_balanced, y[noisy_indices]], axis=0)
-
-    return X_balanced, y_balanced
 
 def balance_class(X, y, noise_std=0.01):
     unique_classes, class_counts = np.unique(y, return_counts=True)
@@ -142,76 +96,7 @@ def balance_class(X, y, noise_std=0.01):
         y_balanced = y.copy()
     return X_balanced, y_balanced
 
-def create_data():
-    # Number of points to generate
-    num_points = 100
-    # Generate random x values
-    x1_values = np.random.uniform(low=-30, high=30, size=num_points)
-    x2_values = np.random.uniform(low=-30, high=30, size=num_points)
-    x3_values = np.random.uniform(low=-30, high=30, size=num_points)
-    # Create y values based on the decision boundary if x+y > 9 then 1 else 0
-    labels = np.where((x1_values + x2_values + x3_values > 10), 1, 0)
-    # Split the data into training and testing sets
-    x = np.column_stack((x1_values, x2_values,x3_values))
-    return  x, labels, x1_values, 3
-def create():
-    # Set a random seed for reproducibility
 
-    # Number of points to generate
-    num_points = 100
-
-    # Generate random x values
-    x1_values = np.random.uniform(low=0, high=30, size=num_points)
-
-    # Create y values based on the decision boundary y=-x with some random noise
-    x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
-
-    # Create labels based on the side of the decision boundary
-    labels = np.where(x2_values > -1 * x1_values, 1, 0)
-
-    # Create a scatter plot of the dataset with color-coded labels
-    plt.scatter(x1_values, x2_values, c=labels, cmap='viridis', marker='o', label='Data Points')
-    # Split the data into training and testing sets
-    x = np.column_stack((x1_values, x2_values))
-    return x, labels, x1_values, 3
-
-def create_n_dim():
-        # Number of points to generate
-        num_points = 2000
-
-        # Generate random x values
-        x1_values = np.random.uniform(low=0, high=30, size=num_points)
-
-        # Create y values based on the decision boundary y=-x with some random noise
-        x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
-
-        # Create labels based on the side of the decision boundary
-        labels = np.where(x2_values > -1 * x1_values, 1, 0)
-        # create numpy of zeros
-        X = np.zeros((num_points, 10))
-        i = 0
-        while i < num_points:
-            # choose random index to assign x1 and x2 values
-            index = np.random.randint(0, 10)
-            # assign x1 to index for 5 samples
-            X[i][index] = x1_values[i]
-            X[i + 1][index] = x1_values[i + 1]
-            X[i + 2][index] = x1_values[i + 2]
-            X[i + 3][index] = x1_values[i + 3]
-            X[i + 4][index] = x1_values[i + 4]
-            # choose random index to assign x2 that is not the same as x1
-            index2 = np.random.randint(0, 10)
-            while index2 == index:
-                index2 = np.random.randint(0, 10)
-            X[i][index2] = x2_values[i]
-            X[i + 1][index2] = x2_values[i + 1]
-            X[i + 2][index2] = x2_values[i + 2]
-            X[i + 3][index2] = x2_values[i + 3]
-            X[i + 4][index2] = x2_values[i + 4]
-            i += 5
-        question_names= [0,1,2,3,4,5,6,7,8,9]
-
-        return X, labels, question_names, 10
 
 
 class Guesser(nn.Module):
@@ -224,7 +109,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
+        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
         self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
