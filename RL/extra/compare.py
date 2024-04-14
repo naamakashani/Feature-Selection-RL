@@ -36,7 +36,7 @@ def get_selected_features(tree, X):
 
 def decision_tree():
     # Splitting data into training and testing sets
-    X, y, _, number_of_features = utils.load_diabetes()
+    X, y, _, number_of_features = utils.load_csv_data()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     clf = DecisionTreeClassifier(max_depth=2)  # You can specify hyperparameters here
     clf.fit(X_train, y_train)
@@ -171,7 +171,7 @@ def get_selected_features_xgboost(model, threshold):
 
 
 def XGboost_new():
-    X, y, _, number_of_features = utils.load_ehr()
+    X, y, _, number_of_features = utils.load_csv_data()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dtest = xgb.DMatrix(X_test, label=y_test)

@@ -1,14 +1,11 @@
 import shutil
-
 import torch.nn
-from collections import deque
 from typing import List, Tuple
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
-from env import *
+from env_robust import *
 from agent import *
 from ReplayMemory import *
-from itertools import count
 from PrioritiziedReplayMemory import *
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -30,11 +27,11 @@ parser.add_argument("--gamma",
                     help="Discount rate for Q_target")
 parser.add_argument("--n_update_target_dqn",
                     type=int,
-                    default=10,
+                    default=50,
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=15,
+                    default=30,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -82,7 +79,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=20,
+                    default=100,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -155,21 +152,13 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim / 3:
+    while not done and t < env.episode_length:
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask)
-        # if r < 0:
-        # done = True
         mask[a] = 0
         total_reward += r
         td = calculate_td_error(s, a, r, next_state, done, agent, FLAGS.gamma)
         priorityRM.push(s, a, r, next_state, done, td)
-        # replay_memory.push(s, a, r, next_state, done)
-        # if len(replay_memory) > batch_size:
-        #     if train_dqn:
-        #         minibatch = replay_memory.pop(batch_size)
-        #         train_helper(agent, minibatch, FLAGS.gamma)
-        #         agent.update_learning_rate()
         if len(priorityRM) > batch_size:
             if train_dqn:
                 minibatch, indices, weights = priorityRM.pop(batch_size)
@@ -217,24 +206,7 @@ def epsilon_annealing(initial_epsilon, min_epsilon, anneal_steps, current_step):
     return epsilon
 
 
-# def epsilon_annealing(episode: int, max_episode: int, min_eps: float) -> float:
-#     """Returns 𝜺-greedy
-#     1.0---|\
-#           | \
-#           |  \
-#     min_e +---+------->
-#               |
-#               max_episode
-#     Args:
-#         epsiode (int): Current episode (0<= episode)
-#         max_episode (int): After max episode, 𝜺 will be `min_eps`
-#         min_eps (float): 𝜺 will never go below this value
-#     Returns:
-#         float: 𝜺 value
-#     """
-#
-#     slope = (min_eps - 1.0) / max_episode
-#     return max(slope * episode + 1.0, min_eps)
+
 
 
 def save_networks(i_episode: int, env, agent,
@@ -268,13 +240,7 @@ def save_networks(i_episode: int, env, agent,
     os.rename(dqn_save_path + '~', dqn_save_path)
 
 
-# Function to extract states from replay memory
-# def extract_states_from_replay_memory(replay_memory):
-#     states = []
-#     for experience in replay_memory:
-#         state = experience['state']  # Assuming 'state' key holds the state information
-#         states.append(state)
-#     return np.array(states)
+
 
 
 def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
@@ -362,7 +328,7 @@ def test(env, agent, input_dim, output_dim):
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim / 3 and not done:
+        while t < env.episode_length and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -444,7 +410,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(agent.input_dim / 3)):
+        for t in range(int(env.episode_length)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -495,7 +461,7 @@ def val(i_episode: int,
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < agent.input_dim / 3 and not done:
+        while t < env.episode_length and not done:
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
@@ -561,10 +527,6 @@ def main():
     train_guesser = False
 
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
-        if i % ( FLAGS.ep_per_trainee) == 0:
-                train_dqn = False
-                train_guesser = True
-
         eps = epsilon_annealing(FLAGS.initial_epsilon, FLAGS.min_epsilon, FLAGS.anneal_steps, i)
         # play an episode
         reward, t = play_episode(env,
@@ -576,7 +538,7 @@ def main():
                                  train_guesser=train_guesser, mode='training')
         rewards_list.append(reward)
         steps.append(t)
-        if i % FLAGS.val_interval == 0:
+        if i % FLAGS.val_interval == 0 and i > 100:
             # compute performance on validation set
             new_best_val_acc = val(i_episode=i,
                                    best_val_acc=best_val_acc, env=env, agent=agent)

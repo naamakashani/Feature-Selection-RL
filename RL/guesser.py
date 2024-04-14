@@ -109,7 +109,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
+        self.X, self.y, self.question_names, self.features_size = utils.load_ehr()
         self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
@@ -170,7 +170,7 @@ def mask(input: np.array) -> np.array:
         for i in range(input.shape[0]):
             #choose a random number between 0 and 1
             # fraction = np.random.uniform(0, 1)
-            fraction = 0.3
+            fraction = 0.2
             if (np.random.rand() < fraction):
                 input[i] = 0
         return input
@@ -178,7 +178,7 @@ def mask(input: np.array) -> np.array:
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
                 # fraction = np.random.uniform(0, 1)
-                fraction = 0.3
+                fraction = 0.5
                 if (np.random.rand() < fraction):
                     input[j][i] = 0
         return input
@@ -293,12 +293,7 @@ def train_model(model,
     for i in range(1, nepochs):
         running_loss = 0
         for input, labels in train_loader:
-            # send images and labels and model to adversarial training
-            if i% 2== 0:
-                input = mask(input)
-                # input= create_adverserial_input(input, labels, model)
-            else:
-               input = mask(input)
+            input = mask(input)
             input = input.view(input.shape[0], -1).float()
             model.train()
             model.optimizer.zero_grad()
@@ -411,7 +406,6 @@ def main():
     y_tensor_test = torch.Tensor(y_test)  # Assuming y_data contains integers
     dataset_test = TensorDataset(X_tensor_test, y_tensor_test)
     data_loader_test = DataLoader(dataset_test, batch_size=FLAGS.batch_size, shuffle=True)
-
     test(data_loader_test, model.path_to_save)
 
 

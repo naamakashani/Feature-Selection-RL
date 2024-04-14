@@ -1,8 +1,6 @@
 from agent_lstm import *
 from RL.lstm_model.lstm_guesser import *
 
-
-
 class State(nn.Module):
 
     def __init__(self, features_size, embedding_dim, device):
@@ -11,7 +9,7 @@ class State(nn.Module):
         self.features_size = features_size
         self.embedding_dim = embedding_dim
         self.lstm = nn.LSTMCell(input_size=self.embedding_dim *2 , hidden_size=self.embedding_dim *2 )
-        self.initial_c = nn.Parameter(torch.randn(1, self.embedding_dim *2 ), requires_grad=True).to(
+        self.initial_c = nn.Parameter(torch.randn(1, self.embedding_dim *2), requires_grad=True).to(
             device=self.device)
         self.initial_h = nn.Parameter(torch.randn(1, self.embedding_dim *2), requires_grad=True).to(
             device=self.device)

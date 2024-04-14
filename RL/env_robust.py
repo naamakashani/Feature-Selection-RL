@@ -3,7 +3,7 @@ import os
 from sklearn.model_selection import train_test_split
 import gymnasium
 import torch
-from RL.guesser import Guesser
+from RL.robust_guesser import Guesser
 import torch.nn.functional as F
 
 
@@ -52,7 +52,7 @@ class myEnv(gymnasium.Env):
 
         cost_list = np.array(np.ones(self.guesser.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
-        self.episode_length = self.guesser.features_size /2
+        self.episode_length = self.guesser.features_size/2
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
             save_dir = os.path.join(os.getcwd(), flags.save_guesser_dir)

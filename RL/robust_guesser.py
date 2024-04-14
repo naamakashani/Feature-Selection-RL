@@ -25,7 +25,7 @@ parser.add_argument("--batch_size",
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=200,
+                    default=250,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
@@ -189,7 +189,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_data_labels()
+        self.X, self.y, self.question_names, self.features_size = utils.load_ehr()
         self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
@@ -380,7 +380,7 @@ def train_model(model,
         running_loss = 0
         for input, labels in train_loader:
             # send images and labels and model to adversarial training
-            if i > 100 and i < 120:
+            if (i > 100 and i < 120) or (i > 180 and i < 200) :
                 input = create_adverserial_input(input, labels, model)
             else:
                 input = mask(input)
@@ -437,7 +437,6 @@ def save_plot_acuuracy_epoch(val_accuracy_list, training_loss_list):
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.grid(True)
-
     plt.tight_layout()
     plt.savefig('accuracy_loss_plot.png')
     plt.show()

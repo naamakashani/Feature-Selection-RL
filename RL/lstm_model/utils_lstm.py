@@ -175,77 +175,46 @@ def load_data(case):
 
     return X, y, question_names, class_names, scaler
 
-
-def load_heart():
+def load_csv_data():
     data = []
     labels = []
-    file_path = "/RL/extra/heart.csv"
+    file_path = "../../ehrData/full_cohort_data.csv"
     # Open the CSV file
     with open(file_path, newline='') as csvfile:
         # Create a CSV reader
         csv_reader = csv.reader(csvfile)
         for line in csv_reader:
-            # if it the first line (header) skip it
+            # if it's the first line (header) skip it
             if line[0] == 'age':
                 # save the header in npy array for later use
                 question_names = np.array(line)
                 continue
-            # columns = [column.split(',') for column in line]
+            # Extract columns from the line
             columns = line
             columns_without_label = columns[0:-1]
+            # Replace missing values with the mean of the column
             for i in range(len(columns_without_label)):
-                columns_without_label[i] = float(columns_without_label[i])
+                if columns_without_label[i] == '':
+                    # Convert other values to float for mean calculation
+                    columns_without_label[i] = np.nan
+                else:
+                    columns_without_label[i] = float(columns_without_label[i])
+            # Calculate mean of the column
+            column_mean = np.nanmean(columns_without_label)
+            # Replace missing values with the mean
+            for i in range(len(columns_without_label)):
+                if np.isnan(columns_without_label[i]):
+                    columns_without_label[i] = column_mean
             data.append(columns_without_label)
-
             labels.append(int(columns[-1]))
 
-    # convet to float each element
-
-    # Convert zero_list to a NumPy array
+    # Convert lists to NumPy arrays
     X = np.array(data)
     y = np.array(labels)
 
     n, d = X.shape
-    class_names = [0, 1]
-    print('loaded data,  {} rows, {} columns'.format(n, d))
+    print('Loaded data with {} rows and {} columns'.format(n, d))
     return X, y, question_names, len(columns_without_label)
-
-
-def load_dermatology():
-    data = []
-    labels = []
-    file_path = 'C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\dermatology_database.csv'
-    # Open the CSV file
-    with open(file_path, newline='') as csvfile:
-        # Create a CSV reader
-        csv_reader = csv.reader(csvfile)
-        for line in csv_reader:
-            if line[0] == 'erythema':
-                question_names = np.array(line)
-                continue
-
-            columns = line
-            columns_without_label = columns[0:-1]
-            for i in range(len(columns_without_label)):
-                if columns_without_label[i] == '?':
-                    columns_without_label[i] = 0
-                columns_without_label[i] = float(columns_without_label[i])
-            data.append(columns_without_label)
-            labels.append(int(float((columns[-1]))))
-
-    # convet to float each element
-    # balance data and labels in multiclass classification
-
-    # Convert zero_list to a NumPy array
-    X = np.array(data)
-    y = np.array(labels)
-
-    n, d = X.shape
-    class_names = [0, 1]
-    print('loaded data,  {} rows, {} columns'.format(n, d))
-    return X, y, question_names, len(columns_without_label)
-
-
 def load_gisetta():
     data_path = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\gisette\\gisette_train.data"
     labels_path = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\gisette\\gisette_train.labels"

@@ -502,7 +502,46 @@ def load_covid():
     print('loaded data,  {} rows, {} columns'.format(n, d))
     return X, y, question_names, len(columns_without_label)
 
+def load_csv_data():
+    data = []
+    labels = []
+    file_path = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\ehrData\\full_cohort_data.csv"
+    # Open the CSV file
+    with open(file_path, newline='') as csvfile:
+        # Create a CSV reader
+        csv_reader = csv.reader(csvfile)
+        for line in csv_reader:
+            # if it's the first line (header) skip it
+            if line[0] == 'age':
+                # save the header in npy array for later use
+                question_names = np.array(line)
+                continue
+            # Extract columns from the line
+            columns = line
+            columns_without_label = columns[0:-1]
+            # Replace missing values with the mean of the column
+            for i in range(len(columns_without_label)):
+                if columns_without_label[i] == '':
+                    # Convert other values to float for mean calculation
+                    columns_without_label[i] = np.nan
+                else:
+                    columns_without_label[i] = float(columns_without_label[i])
+            # Calculate mean of the column
+            column_mean = np.nanmean(columns_without_label)
+            # Replace missing values with the mean
+            for i in range(len(columns_without_label)):
+                if np.isnan(columns_without_label[i]):
+                    columns_without_label[i] = column_mean
+            data.append(columns_without_label)
+            labels.append(int(columns[-1]))
 
+    # Convert lists to NumPy arrays
+    X = np.array(data)
+    y = np.array(labels)
+
+    n, d = X.shape
+    print('Loaded data with {} rows and {} columns'.format(n, d))
+    return X, y, question_names, len(columns_without_label)
 def load_diabetes():
     data = []
     labels = []

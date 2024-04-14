@@ -1,9 +1,9 @@
-
 from RL.lstm_model.state import *
 import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
 from RL.lstm_model.utils_lstm import *
+import gymnasium
 
 
 class myEnv(gymnasium.Env):
@@ -30,7 +30,8 @@ class myEnv(gymnasium.Env):
         self.optimizer_guesser = optim.Adam(self.guesser.parameters(), lr=flags.lr)
         self.optimizer_state = optim.Adam(self.state.parameters(), lr=flags.lr)
         self.optimizer_embedding = optim.Adam(self.question_embedding.parameters(), lr=flags.lr)
-        self.episode_length = self.features_size / 4
+        self.episode_length = self.features_size / 3
+        self.count = 0
 
     def reset(self,
               mode='training',
@@ -128,7 +129,6 @@ class myEnv(gymnasium.Env):
             ind = torch.LongTensor([action]).to(device=self.device)
             question_embedding = self.question_embedding(ind)
             question_embedding = question_embedding.to(device=self.device)
-
             next_state = self.state(question_embedding, answer)
             next_state = torch.autograd.Variable(torch.Tensor(next_state))
             next_state = next_state.float()
@@ -142,12 +142,14 @@ class myEnv(gymnasium.Env):
             self.loss = self.criterion(self.probs, y_true_tensor)
             self.loss.backward()
             if eps >= 0:
-                self.optimizer_state.step()
-                self.optimizer_state.zero_grad()
-                self.optimizer_embedding.step()
-                self.optimizer_embedding.zero_grad()
+                self.count = self.count + 1
+                if self.count > 2000:
+                    self.optimizer_state.step()
+                    self.optimizer_state.zero_grad()
                 self.optimizer_guesser.step()
                 self.optimizer_guesser.zero_grad()
+                self.optimizer_embedding.step()
+                self.optimizer_embedding.zero_grad()
 
             self.reward = self.prob_guesser(next_state) - self.prob_guesser(prev_state)
             self.guess = -1

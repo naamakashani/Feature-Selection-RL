@@ -1,9 +1,12 @@
 import shutil
+
+import numpy
 import torch.nn
-from typing import Tuple
+from typing import List, Tuple
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
 from env_lstm import *
+from agent_lstm import *
 from PrioritiziedReplayMemory_lstm import *
 from RL.lstm_model.state import *
 
@@ -12,10 +15,6 @@ parser.add_argument("--save_dir",
                     type=str,
                     default='C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model\\ddqn_models',
                     help="Directory for saved models")
-parser.add_argument("--save_guesser_dir",
-                    type=str,
-                    default='C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model\\model_guesser_lstm',
-                    help="Directory for saved guesser model")
 parser.add_argument("--directory",
                     type=str,
                     default="C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\lstm_model\\",
@@ -78,7 +77,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=1000,
+                    default=200,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -156,8 +155,7 @@ def play_episode(epoch, env,
     while not done and t < env.episode_length:
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask, eps)
-        # if r < 0:
-        # done = True
+
         mask[a] = 0
         total_reward += r
         td = calculate_td_error(s, a, r, next_state, done, agent, FLAGS.gamma)
@@ -209,26 +207,6 @@ def epsilon_annealing(initial_epsilon, min_epsilon, anneal_steps, current_step):
     return epsilon
 
 
-# def epsilon_annealing(episode: int, max_episode: int, min_eps: float) -> float:
-#     """Returns 𝜺-greedy
-#     1.0---|\
-#           | \
-#           |  \
-#     min_e +---+------->
-#               |
-#               max_episode
-#     Args:
-#         epsiode (int): Current episode (0<= episode)
-#         max_episode (int): After max episode, 𝜺 will be `min_eps`
-#         min_eps (float): 𝜺 will never go below this value
-#     Returns:
-#         float: 𝜺 value
-#     """
-#
-#     slope = (min_eps - 1.0) / max_episode
-#     return max(slope * episode + 1.0, min_eps)
-
-
 def save_networks(i_episode: int, env, agent,
                   val_acc=None) -> None:
     """ A method to save parameters of guesser and dqn """
@@ -239,15 +217,13 @@ def save_networks(i_episode: int, env, agent,
         guesser_filename = 'best_guesser.pth'
         dqn_filename = 'best_dqn.pth'
         state_filename = 'best_state.pth'
-        embedding_filename= 'best_embed.pth'
+        embedding_filename = 'best_embed.pth'
 
     else:
         guesser_filename = '{}_{}_{:1.3f}.pth'.format(i_episode, 'guesser', val_acc)
         dqn_filename = '{}_{}_{:1.3f}.pth'.format(i_episode, 'dqn', val_acc)
         state_filename = '{}_{}_{:1.3f}.pth'.format(i_episode, 'state', val_acc)
         embedding_filename = '{}_{}_{:1.3f}.pth'.format(i_episode, 'embed', val_acc)
-
-
 
     guesser_save_path = os.path.join(FLAGS.save_dir, guesser_filename)
     dqn_save_path = os.path.join(FLAGS.save_dir, dqn_filename)
@@ -280,6 +256,7 @@ def save_networks(i_episode: int, env, agent,
     torch.save(env.question_embedding.cpu().state_dict(), embed_save_path + '~')
     os.rename(embed_save_path + '~', embed_save_path)
 
+
 def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
                   val_acc=None) -> None:
     """ A method to load parameters of guesser and dqn """
@@ -309,7 +286,7 @@ def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
     dqn.to(device=device)
 
     # load state
-    my_state = State(env.features_size, env.embedding_dim,env.device)
+    my_state = State(env.features_size, env.embedding_dim, env.device)
     state_state_dict = torch.load(state_load_path)
     my_state.load_state_dict(state_state_dict)
     my_state.to(device=device)
@@ -370,12 +347,12 @@ def test(env, agent, input_dim, output_dim):
     for i in range(n_test):
         number_of_steps = 0
         my_state = env.reset(mode='test',
-                          patient=i,
-                          train_guesser=False)
+                             patient=i,
+                             train_guesser=False)
         mask = env.reset_mask()
         t = 0
         done = False
-        while t < env.episode_length  and not done:
+        while t < env.episode_length and not done:
             number_of_steps += 1
             # select action from policy
             if t == 0:
@@ -457,7 +434,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(env.episode_length)):
+        for t in range(int(env.episode_length / 2)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -569,12 +546,6 @@ def main():
     rewards_list = []
     steps = []
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
-        # if i % (2 * FLAGS.ep_per_trainee) == 0:
-        #     train_dqn = False
-        #     train_guesser = True
-        # if i % (2 * FLAGS.ep_per_trainee) == FLAGS.ep_per_trainee:
-        #     train_dqn = True
-        #     train_guesser = False
 
         eps = epsilon_annealing(FLAGS.initial_epsilon, FLAGS.min_epsilon, FLAGS.anneal_steps, i)
         # play an episode
