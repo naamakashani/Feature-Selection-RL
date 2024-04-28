@@ -29,7 +29,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=50,
+                    default=20,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -37,7 +37,7 @@ parser.add_argument("--ep_per_trainee",
                     help="Switch between training dqn and guesser every this # of episodes")
 parser.add_argument("--batch_size",
                     type=int,
-                    default=128,
+                    default=32,
                     help="Mini-batch size")
 parser.add_argument("--hidden-dim",
                     type=int,
@@ -77,7 +77,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=200,
+                    default=50,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -161,7 +161,7 @@ def play_episode(epoch, env,
         td = calculate_td_error(s, a, r, next_state, done, agent, FLAGS.gamma)
         priorityRM.push(s, a, r, next_state, done, td)
         if len(priorityRM) > batch_size:
-            if train_dqn and epoch > 1000:
+            if train_dqn and epoch > 5000:
                 minibatch, indices, weights = priorityRM.pop(batch_size)
                 td_errors = []
                 for transition, weight in zip(minibatch, weights):
@@ -506,8 +506,9 @@ def val(i_episode: int,
             y_hat_val[i] = env.guess
             # create list of all the masks
         mask_list.append(mask)
-
     confmat = confusion_matrix(env.y_val, y_hat_val)
+    print('confusion matrix: ')
+    print(confmat)
     acc = np.sum(np.diag(confmat)) / len(env.y_val)
     print('Validation accuracy: {:1.3f}'.format(acc))
 
@@ -543,11 +544,13 @@ def main():
     train_dqn = True
     train_guesser = False
     i = 0
+    i2 = 0
     rewards_list = []
     steps = []
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
-
-        eps = epsilon_annealing(FLAGS.initial_epsilon, FLAGS.min_epsilon, FLAGS.anneal_steps, i)
+        if i % 2000 == 0:
+            i2 = 0
+        eps = epsilon_annealing(FLAGS.initial_epsilon, FLAGS.min_epsilon, FLAGS.anneal_steps, i2)
         # play an episode
         reward, t = play_episode(i, env,
                                  agent,
@@ -558,7 +561,8 @@ def main():
                                  train_guesser=train_guesser, mode='training')
         rewards_list.append(reward)
         steps.append(t)
-        if i % FLAGS.val_interval == 0 and i > 1000:
+        if i % FLAGS.val_interval == 0 and i > 5000:
+
             # compute performance on validation set
             new_best_val_acc = val(i_episode=i,
                                    best_val_acc=best_val_acc, env=env, agent=agent)
@@ -574,6 +578,7 @@ def main():
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
         i += 1
+        i2 += 1
 
     acc, intersect, unoin = test(env, agent, input_dim, output_dim)
     steps = np.mean(steps)

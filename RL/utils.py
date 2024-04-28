@@ -75,7 +75,13 @@ def load_mnist_data():
     X = np.concatenate((X_train, X_test), axis=0)
     y = np.concatenate((y_train, y_test), axis=0)
     return X, y, y, len(X[0])
-
+def load_FS_data():
+    # filter_preprocess_X()
+    outcomes = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\ehrData\diabetes_all.pkl')
+    X= outcomes['features']
+    y= outcomes['targets']
+    cost= outcomes['costs']
+    return X,y,cost, len(X[0])
 
 def load_data_labels():
     # filter_preprocess_X()
@@ -307,6 +313,64 @@ def load_ehr():
     print('loaded data,  {} rows, {} columns'.format(n, d))
     return X, y, question_names, len(columns_without_label)
 
+
+def load_sonar():
+    labels = []
+    data = []
+    file_path = "C:\\Users\\kashann\\PycharmProjects\\choiceMira\\ehrData\\sonar.all-data.csv"
+    # Open the CSV file
+    with open(file_path, newline='') as csvfile:
+        # Create a CSV reader
+        csv_reader = csv.reader(csvfile)
+        for line in csv_reader:
+            if line[0] == 'Freq_1':
+                question_names = np.array(line)
+                continue
+            columns = line
+            columns_without_label = columns[0:-1]
+            for i in range(len(columns_without_label)):
+                columns_without_label[i] = float(columns_without_label[i])
+            data.append(columns_without_label)
+            if columns[-1] == "R":
+                label = 0
+            else:
+                label = 1
+            labels.append(float(label))
+
+    # convet to float each element
+    # balance data and labels in multiclass classification
+
+    # Convert zero_list to a NumPy array
+    X = np.array(data)
+    y = np.array(labels)
+
+    n, d = X.shape
+    class_names = [0, 1]
+    print('loaded data,  {} rows, {} columns'.format(n, d))
+    return X, y, question_names, len(columns_without_label)
+
+
+def import_breast():
+    from ucimlrepo import fetch_ucirepo
+
+    # fetch dataset
+    breast_cancer_wisconsin_prognostic = fetch_ucirepo(id=16)
+
+    # data (as pandas dataframes)
+    X = breast_cancer_wisconsin_prognostic.data.features.to_numpy()
+    y = breast_cancer_wisconsin_prognostic.data.targets.to_numpy()
+    y[y == 'R'] = 1
+    y[y == 'N'] = 0
+    X[X == 'nan'] = 0
+    X=np.nan_to_num(X, nan=0)
+    y=y.squeeze()
+    y=y.tolist()
+    y=np.array(y)
+
+
+    return X, y, breast_cancer_wisconsin_prognostic.metadata.num_features, breast_cancer_wisconsin_prognostic.metadata.num_features
+
+
 def create_data():
     # Number of points to generate
     num_points = 100
@@ -317,8 +381,10 @@ def create_data():
     # Create y values based on the decision boundary if x+y > 9 then 1 else 0
     labels = np.where((x1_values + x2_values + x3_values > 10), 1, 0)
     # Split the data into training and testing sets
-    x = np.column_stack((x1_values, x2_values,x3_values))
-    return  x, labels, x1_values, 3
+    x = np.column_stack((x1_values, x2_values, x3_values))
+    return x, labels, x1_values, 3
+
+
 def create():
     # Set a random seed for reproducibility
 
@@ -339,6 +405,7 @@ def create():
     # Split the data into training and testing sets
     x = np.column_stack((x1_values, x2_values))
     return x, labels, x1_values, 3
+
 
 def balance_class_multi(X, y, noise_std=0.01):
     unique_classes, class_counts = np.unique(y, return_counts=True)
@@ -366,43 +433,44 @@ def balance_class_multi(X, y, noise_std=0.01):
 
     return X_balanced, y_balanced
 
+
 def create_n_dim():
-        # Number of points to generate
-        num_points = 2000
+    # Number of points to generate
+    num_points = 2000
 
-        # Generate random x values
-        x1_values = np.random.uniform(low=0, high=30, size=num_points)
+    # Generate random x values
+    x1_values = np.random.uniform(low=0, high=30, size=num_points)
 
-        # Create y values based on the decision boundary y=-x with some random noise
-        x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
+    # Create y values based on the decision boundary y=-x with some random noise
+    x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
 
-        # Create labels based on the side of the decision boundary
-        labels = np.where(x2_values > -1 * x1_values, 1, 0)
-        # create numpy of zeros
-        X = np.zeros((num_points, 10))
-        i = 0
-        while i < num_points:
-            # choose random index to assign x1 and x2 values
-            index = np.random.randint(0, 10)
-            # assign x1 to index for 5 samples
-            X[i][index] = x1_values[i]
-            X[i + 1][index] = x1_values[i + 1]
-            X[i + 2][index] = x1_values[i + 2]
-            X[i + 3][index] = x1_values[i + 3]
-            X[i + 4][index] = x1_values[i + 4]
-            # choose random index to assign x2 that is not the same as x1
+    # Create labels based on the side of the decision boundary
+    labels = np.where(x2_values > -1 * x1_values, 1, 0)
+    # create numpy of zeros
+    X = np.zeros((num_points, 10))
+    i = 0
+    while i < num_points:
+        # choose random index to assign x1 and x2 values
+        index = np.random.randint(0, 10)
+        # assign x1 to index for 5 samples
+        X[i][index] = x1_values[i]
+        X[i + 1][index] = x1_values[i + 1]
+        X[i + 2][index] = x1_values[i + 2]
+        X[i + 3][index] = x1_values[i + 3]
+        X[i + 4][index] = x1_values[i + 4]
+        # choose random index to assign x2 that is not the same as x1
+        index2 = np.random.randint(0, 10)
+        while index2 == index:
             index2 = np.random.randint(0, 10)
-            while index2 == index:
-                index2 = np.random.randint(0, 10)
-            X[i][index2] = x2_values[i]
-            X[i + 1][index2] = x2_values[i + 1]
-            X[i + 2][index2] = x2_values[i + 2]
-            X[i + 3][index2] = x2_values[i + 3]
-            X[i + 4][index2] = x2_values[i + 4]
-            i += 5
-        question_names= [0,1,2,3,4,5,6,7,8,9]
+        X[i][index2] = x2_values[i]
+        X[i + 1][index2] = x2_values[i + 1]
+        X[i + 2][index2] = x2_values[i + 2]
+        X[i + 3][index2] = x2_values[i + 3]
+        X[i + 4][index2] = x2_values[i + 4]
+        i += 5
+    question_names = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-        return X, labels, question_names, 10
+    return X, labels, question_names, 10
 
 
 def load_gisetta():
@@ -502,6 +570,7 @@ def load_covid():
     print('loaded data,  {} rows, {} columns'.format(n, d))
     return X, y, question_names, len(columns_without_label)
 
+
 def load_csv_data():
     data = []
     labels = []
@@ -542,17 +611,19 @@ def load_csv_data():
     n, d = X.shape
     print('Loaded data with {} rows and {} columns'.format(n, d))
     return X, y, question_names, len(columns_without_label)
+
+
 def load_diabetes():
     data = []
     labels = []
-    file_path = './/extra//diabetes//diabetes_prediction_dataset.csv'
+    file_path = 'C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\diabetes\\diabetes_prediction_dataset.csv'
     df = pd.read_csv(file_path)
     df_1 = df[df['diabetes'] == 1]
     df_0 = df[df['diabetes'] == 0].sample(frac=0.092)
     df_all = pd.concat([df_0, df_1])
 
     # save df clean to csv
-    file_path_clean = './/extra//diabetes//diabetes_clean.csv'
+    file_path_clean = 'C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\diabetes\\diabetes_clean.csv'
     df_all.to_csv(file_path_clean, index=False)
     # Open the CSV file
     with open(file_path_clean, newline='') as csvfile:

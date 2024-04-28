@@ -2,7 +2,7 @@ from RL.lstm_model.state import *
 import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
-from RL.lstm_model.utils_lstm import *
+from RL.utils import *
 import gymnasium
 
 
@@ -20,17 +20,17 @@ class myEnv(gymnasium.Env):
         self.question_embedding = nn.Embedding(num_embeddings=self.features_size, embedding_dim=self.embedding_dim)
         self.state = State(self.features_size, self.embedding_dim, self.device)
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y,
-                                                                                test_size=0.3)
+                                                                                test_size=0.1)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
                                                                               self.y_train,
-                                                                              test_size=0.05)
+                                                                              test_size=0.2)
         cost_list = np.array(np.ones(self.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer_guesser = optim.Adam(self.guesser.parameters(), lr=flags.lr)
         self.optimizer_state = optim.Adam(self.state.parameters(), lr=flags.lr)
         self.optimizer_embedding = optim.Adam(self.question_embedding.parameters(), lr=flags.lr)
-        self.episode_length = self.features_size / 3
+        self.episode_length = self.features_size / 2
         self.count = 0
 
     def reset(self,
@@ -139,18 +139,16 @@ class myEnv(gymnasium.Env):
             self.probs = probs.float()
             self.probs = F.softmax(self.probs, dim=1)
             y_true_tensor = y_true_tensor.float()
+            self.optimizer_state.zero_grad()
+            self.optimizer_guesser.zero_grad()
+            self.optimizer_embedding.zero_grad()
             self.loss = self.criterion(self.probs, y_true_tensor)
             self.loss.backward()
             if eps >= 0:
                 self.count = self.count + 1
-                if self.count > 2000:
-                    self.optimizer_state.step()
-                    self.optimizer_state.zero_grad()
+                self.optimizer_state.step()
                 self.optimizer_guesser.step()
-                self.optimizer_guesser.zero_grad()
                 self.optimizer_embedding.step()
-                self.optimizer_embedding.zero_grad()
-
             self.reward = self.prob_guesser(next_state) - self.prob_guesser(prev_state)
             self.guess = -1
             self.done = False

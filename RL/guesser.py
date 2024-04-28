@@ -48,7 +48,6 @@ parser.add_argument("--val_trials_wo_im",
                     default=100,
                     help="Number of validation trials without improvement")
 
-
 FLAGS = parser.parse_args(args=[])
 
 
@@ -66,8 +65,6 @@ def add_noise(X, noise_std=0.01):
     noise = np.random.normal(loc=0, scale=noise_std, size=X.shape)
     X_noisy = X + noise
     return X_noisy
-
-
 
 
 def balance_class(X, y, noise_std=0.01):
@@ -97,6 +94,28 @@ def balance_class(X, y, noise_std=0.01):
     return X_balanced, y_balanced
 
 
+def multiply_samples_with_noise(X, Y, noise_std=0.01):
+    """
+    Multiply samples of input features with noise.
+
+    Parameters:
+    - X: Input features (numpy array).
+    - Y: Target values (numpy array).
+    - num_samples: Number of times to multiply the samples.
+    - noise_std: Standard deviation of the Gaussian noise.
+
+    Returns:
+    - X_multiplied_noisy: Multiplied input features with added noise.
+    - Y: Target values (unchanged).
+    """
+    X_multiplied_noisy = [X]
+    Y_mul = np.concatenate([Y, Y])
+
+    X_noisy = add_noise(X, noise_std)
+    X_multiplied_noisy.append(X_noisy)
+    X_multiplied_noisy = np.concatenate(X_multiplied_noisy)
+
+    return X_multiplied_noisy, Y_mul
 
 
 class Guesser(nn.Module):
@@ -109,8 +128,10 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_ehr()
+        self.X, self.y, self.question_names, self.features_size = utils.load_gisetta()
         self.X, self.y = balance_class(self.X, self.y)
+        self.X, self.y = multiply_samples_with_noise(self.X, self.y)
+
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
             torch.nn.PReLU(),
@@ -120,8 +141,16 @@ class Guesser(nn.Module):
             torch.nn.Linear(hidden_dim1, hidden_dim2),
             torch.nn.PReLU(),
         )
-
         self.layer3 = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim2, hidden_dim2),
+            torch.nn.PReLU(),
+        )
+        self.layer4 = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim2, hidden_dim2),
+            torch.nn.PReLU(),
+        )
+
+        self.layer5 = torch.nn.Sequential(
             torch.nn.Linear(hidden_dim2, hidden_dim2),
             torch.nn.PReLU(),
         )
@@ -138,7 +167,8 @@ class Guesser(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-
+        x = self.layer4(x)
+        x = self.layer5(x)
         logits = self.logits(x)
         if logits.dim() == 2:
             probs = F.softmax(logits, dim=1)
@@ -164,13 +194,12 @@ def mask(input: np.array) -> np.array:
     :return: masked input
     '''
 
-
     # check if images has 1 dim
     if len(input.shape) == 1:
         for i in range(input.shape[0]):
-            #choose a random number between 0 and 1
+            # choose a random number between 0 and 1
             # fraction = np.random.uniform(0, 1)
-            fraction = 0.2
+            fraction = 0.4
             if (np.random.rand() < fraction):
                 input[i] = 0
         return input
@@ -178,39 +207,37 @@ def mask(input: np.array) -> np.array:
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
                 # fraction = np.random.uniform(0, 1)
-                fraction = 0.5
-                if (np.random.rand() < fraction):
+                fraction = 0.4
+                if np.random.rand() < fraction:
                     input[j][i] = 0
         return input
 
 
+
 def create_adverserial_input(inputs, labels, pretrained_model):
-        input = inputs.view(inputs.shape[0], -1).float()
-        input.requires_grad_(True)  # Set requires_grad for input
-        # Forward pass
-        output = pretrained_model(input)
-        labels = torch.Tensor(labels).long()
-        loss = pretrained_model.criterion(output, labels)
+    #
 
-        # Backward pass
-        loss.backward()
+    input = inputs.view(inputs.shape[0], -1).float()
+    input.requires_grad_(True)  # Set requires_grad for input
+    # Forward pass
+    output = pretrained_model(input)
+    labels = torch.Tensor(labels).long()
+    loss = pretrained_model.criterion(output, labels)
 
-        # Get the gradients
-        gradient = input.grad
+    # Backward pass
+    loss.backward()
+    #
+    # Get the gradients
+    gradient = input.grad
 
-        # Identify the most influential features (those with the largest absolute gradients).
-        absolute_gradients = torch.abs(gradient)
-        max_gradients_indices = torch.argmax(absolute_gradients, dim=-1)
+    # Identify the most influential features (those with the largest absolute gradients).
+    absolute_gradients = torch.abs(gradient)
+    max_gradients_indices = torch.argmax(absolute_gradients, dim=-1)
 
-        # Zero out the most influential features.
-        mask = torch.nn.functional.one_hot(max_gradients_indices, num_classes=input.shape[-1]).float()
-        zeroed_input_features = input * (1 - mask)
-        return zeroed_input_features
-
-
-
-
-
+    # Zero out the most influential features.
+    mask = torch.nn.functional.one_hot(max_gradients_indices, num_classes=input.shape[-1]).float()
+    zeroed_input_features = input * (1 - mask)
+    return zeroed_input_features
 
 
 def val(model, val_loader, best_val_auc=0):
@@ -252,7 +279,7 @@ def test(test_loader, path_to_save):
     y_pred = []
     with torch.no_grad():
         for images, labels in test_loader:
-            images= mask(images)
+            images = mask(images)
             images = images.view(images.shape[0], -1)
             images = images.float()
             output = model(images)
@@ -310,7 +337,7 @@ def train_model(model,
 
         training_loss_list.append(running_loss / len(train_loader))
         # print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
-        if i % 2 == 0:
+        if i % 20 == 0:
             new_best_val_auc = val(model, val_loader, best_val_auc)
             accuracy_list.append(new_best_val_auc)
             if new_best_val_auc > best_val_auc:

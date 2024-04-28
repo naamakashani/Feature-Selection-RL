@@ -79,7 +79,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=100,
+                    default=10,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -525,6 +525,7 @@ def main():
 
     train_dqn = True
     train_guesser = False
+    
 
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
         eps = epsilon_annealing(FLAGS.initial_epsilon, FLAGS.min_epsilon, FLAGS.anneal_steps, i)
@@ -554,6 +555,7 @@ def main():
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
         i += 1
+
 
     acc, intersect, unoin = test(env, agent, input_dim, output_dim)
     steps = np.mean(steps)

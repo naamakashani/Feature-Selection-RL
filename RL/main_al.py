@@ -33,7 +33,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=100,
+                    default=10,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -73,7 +73,7 @@ parser.add_argument("--lr",
                     help="Learning rate")
 parser.add_argument("--weight_decay",
                     type=float,
-                    default=0e-4,
+                    default=0e41,
                     help="l_2 weight penalty")
 parser.add_argument("--lr_decay_factor",
                     type=float,
@@ -81,7 +81,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=100,
+                    default=70,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -154,7 +154,7 @@ def play_episode(env,
     total_reward = 0
     mask = env.reset_mask()
     t = 0
-    while not done and t < agent.input_dim /2:
+    while not done and t < env.episode_length:
         a = agent.get_action(s, env, eps, mask, mode)
         next_state, r, done, info = env.step(a, mask)
         # if r < 0:
@@ -216,24 +216,7 @@ def epsilon_annealing(initial_epsilon, min_epsilon, anneal_steps, current_step):
     return epsilon
 
 
-# def epsilon_annealing(episode: int, max_episode: int, min_eps: float) -> float:
-#     """Returns 𝜺-greedy
-#     1.0---|\
-#           | \
-#           |  \
-#     min_e +---+------->
-#               |
-#               max_episode
-#     Args:
-#         epsiode (int): Current episode (0<= episode)
-#         max_episode (int): After max episode, 𝜺 will be `min_eps`
-#         min_eps (float): 𝜺 will never go below this value
-#     Returns:
-#         float: 𝜺 value
-#     """
-#
-#     slope = (min_eps - 1.0) / max_episode
-#     return max(slope * episode + 1.0, min_eps)
+
 
 
 def save_networks(i_episode: int, env, agent,
@@ -443,7 +426,7 @@ def show_sample_paths(n_patients, env, agent):
         mask = env.reset_mask()
 
         # run episode
-        for t in range(int(env.episode_length )):
+        for t in range(int(env.episode_length)):
 
             # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
@@ -559,6 +542,8 @@ def main():
     train_dqn = True
     train_guesser = False
 
+   
+
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
         if i % ( FLAGS.ep_per_trainee) == 0:
                 train_dqn = False
@@ -575,7 +560,7 @@ def main():
                                  train_guesser=train_guesser, mode='training')
         rewards_list.append(reward)
         steps.append(t)
-        if i % FLAGS.val_interval == 0:
+        if i % FLAGS.val_interval == 0 and i >300:
             # compute performance on validation set
             new_best_val_acc = val(i_episode=i,
                                    best_val_acc=best_val_acc, env=env, agent=agent)
@@ -591,6 +576,7 @@ def main():
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
         i += 1
+
 
     acc, intersect, unoin = test(env, agent, input_dim, output_dim)
     steps = np.mean(steps)
