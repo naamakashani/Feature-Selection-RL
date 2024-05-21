@@ -128,7 +128,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_gisetta()
+        self.X, self.y, self.question_names, self.features_size = utils.load_student()
         self.X, self.y = balance_class(self.X, self.y)
         self.X, self.y = multiply_samples_with_noise(self.X, self.y)
 
@@ -407,11 +407,11 @@ def main():
 
     X_train, X_test, y_train, y_test = train_test_split(model.X,
                                                         model.y,
-                                                        test_size=0.33,
+                                                        test_size=0.05,
                                                         random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_train,
                                                       y_train,
-                                                      test_size=0.05,
+                                                      test_size=0.2,
                                                       random_state=24)
     # Convert data to PyTorch tensors
     X_tensor_train = torch.from_numpy(X_train)

@@ -45,14 +45,14 @@ class myEnv(gymnasium.Env):
         self.guesser = Guesser()
         self.device = device
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,
-                                                                                test_size=0.2)
+                                                                                test_size=0.1)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
                                                                               self.y_train,
                                                                               test_size=0.05)
 
         cost_list = np.array(np.ones(self.guesser.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
-        self.episode_length=25
+        self.episode_length=33
         # self.episode_length = self.guesser.features_size /2
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:

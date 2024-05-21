@@ -33,7 +33,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=10,
+                    default=150,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -81,7 +81,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=70,
+                    default=100,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -541,9 +541,6 @@ def main():
 
     train_dqn = True
     train_guesser = False
-
-   
-
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
         if i % ( FLAGS.ep_per_trainee) == 0:
                 train_dqn = False
@@ -576,8 +573,6 @@ def main():
         if i % FLAGS.n_update_target_dqn == 0:
             agent.update_target_dqn()
         i += 1
-
-
     acc, intersect, unoin = test(env, agent, input_dim, output_dim)
     steps = np.mean(steps)
     show_sample_paths(6, env, agent)

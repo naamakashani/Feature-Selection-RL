@@ -45,7 +45,7 @@ parser.add_argument("--weight_decay",
                     help="l_2 weight penalty")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=20,
+                    default=100,
                     help="Number of validation trials without improvement")
 
 FLAGS = parser.parse_args(args=[])
@@ -189,7 +189,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_gisetta()
+        self.X, self.y, self.question_names, self.features_size = utils.load_student()
         self.X, self.y = balance_class(self.X, self.y)
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
@@ -470,7 +470,7 @@ def main():
 
     X_train, X_test, y_train, y_test = train_test_split(model.X,
                                                         model.y,
-                                                        test_size=0.33,
+                                                        test_size=0.1,
                                                         random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_train,
                                                       y_train,

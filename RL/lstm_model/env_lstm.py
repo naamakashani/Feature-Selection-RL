@@ -14,16 +14,16 @@ class myEnv(gymnasium.Env):
 
         self.device = device
         self.embedding_dim = 10
-        self.X, self.y, self.question_names, self.features_size = load_data_labels()
+        self.X, self.y, self.question_names, self.features_size =load_student()
         self.X, self.y = balance_class(self.X, self.y)
         self.guesser = Guesser(self.embedding_dim * 2)
         self.question_embedding = nn.Embedding(num_embeddings=self.features_size, embedding_dim=self.embedding_dim)
         self.state = State(self.features_size, self.embedding_dim, self.device)
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y,
-                                                                                test_size=0.1)
+                                                                                test_size=0.2)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
                                                                               self.y_train,
-                                                                              test_size=0.2)
+                                                                              test_size=0.1)
         cost_list = np.array(np.ones(self.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
         self.criterion = nn.CrossEntropyLoss()
@@ -96,7 +96,7 @@ class myEnv(gymnasium.Env):
         self.probs = self.guesser(guesser_input)
         self.probs = F.softmax(self.probs, dim=1)
         self.guess = torch.argmax(self.probs).item()
-        class_index = self.y_train[self.patient].item()
+        class_index = int(self.y_train[self.patient].item())
         self.correct_prob = self.probs[0, class_index].item()
         return self.correct_prob
 

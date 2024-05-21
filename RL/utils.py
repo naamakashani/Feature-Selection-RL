@@ -75,13 +75,16 @@ def load_mnist_data():
     X = np.concatenate((X_train, X_test), axis=0)
     y = np.concatenate((y_train, y_test), axis=0)
     return X, y, y, len(X[0])
+
+
 def load_FS_data():
     # filter_preprocess_X()
     outcomes = pd.read_pickle(r'C:\Users\kashann\PycharmProjects\choiceMira\ehrData\diabetes_all.pkl')
-    X= outcomes['features']
-    y= outcomes['targets']
-    cost= outcomes['costs']
-    return X,y,cost, len(X[0])
+    X = outcomes['features']
+    y = outcomes['targets']
+    cost = outcomes['costs']
+    return X, y, cost, len(X[0])
+
 
 def load_data_labels():
     # filter_preprocess_X()
@@ -329,7 +332,15 @@ def load_sonar():
             columns = line
             columns_without_label = columns[0:-1]
             for i in range(len(columns_without_label)):
-                columns_without_label[i] = float(columns_without_label[i])
+                if columns_without_label[i] == 'yes':
+                    columns_without_label[i] = 1
+                if columns_without_label[i] == 'no':
+                    columns_without_label[i] = 0
+                if columns_without_label[i] == 'female':
+                    columns_without_label[i] = 0
+                if columns_without_label[i] == 'male':
+                    columns_without_label[i] = 1
+
             data.append(columns_without_label)
             if columns[-1] == "R":
                 label = 0
@@ -350,6 +361,80 @@ def load_sonar():
     return X, y, question_names, len(columns_without_label)
 
 
+def load_student():
+    df = pd.read_csv("C:\\Users\\kashann\\PycharmProjects\\choiceMira\\ehrData\\student.csv")
+
+    # Drop rows with missing values
+    df = df.dropna()
+
+    mapping = {
+        'Age (4 levels)': {'less 18': 0, '18': 1, '19': 2, '20 and more': 3},
+        'Gender': {'female': 0, 'male': 1},
+        'French nationality': {'no': 0, 'yes': 1},
+        'Field of study': {'other programs': 0, 'medicine and allied programs': 1, 'humanities': 2,
+                           'sciences': 3, 'sports science': 4, 'law and political sciences': 5},
+        'Year of university': {'first': 1, 'second': 2, 'third': 3},
+        'Learning disabilities': {'no': 0, 'yes': 1},
+        'Difficulty memorizing lessons': {'no': 0, 'yes': 1},
+        'Professional objective': {'no': 0, 'yes': 1},
+        'Informed about opportunities': {'no': 0, 'yes': 1},
+        'Satisfied with living conditions': {'no': 0, 'yes': 1},
+        'Living with a partner/child': {'no': 0, 'yes': 1},
+        'Parental home': {'no': 0, 'yes': 1},
+        'Having only one parent': {'no': 0, 'yes': 1},
+        'At least one parent unemployed': {'no': 0, 'yes': 1},
+        'Siblings': {'no': 0, 'yes': 1},
+        'Long commute': {'no': 0, 'yes': 1},
+        'Mode of transportation': {'by public transportation': 0, 'on foot': 1, 'by car': 2},
+        'Financial difficulties': {'no': 0, 'yes': 1},
+        'Grant': {'no': 0, 'yes': 1},
+        'Additional income': {'no': 0, 'yes': 1},
+        'Public health insurance ': {'no': 0, 'yes': 1},
+        'Private health insurance ': {'no': 0, 'yes': 1},
+        'C.M.U.': {'no': 0, 'yes': 1},
+        'Irregular rhythm of meals': {'no': 0, 'yes': 1},
+        'Unbalanced meals': {'no': 0, 'yes': 1},
+        'Eating junk food': {'no': 0, 'yes': 1},
+        'On a diet': {'no': 0, 'yes': 1},
+        'Irregular rhythm or unbalanced meals': {'no': 0, 'yes': 1},
+        'Physical activity(3 levels)': {'no': 0, 'occasionally': 1, 'regularly': 2},
+        'Physical activity(2 levels)': {'no activity or occasionally': 0, 'regularly': 1},
+        'Overweight and obesity': {'no': 0, 'yes': 1},
+        'Prehypertension or hypertension': {'no': 0, 'yes': 1},
+        'Abnormal heart rate': {'no': 0, 'yes': 1},
+        'Decreased in distant visual acuity': {'no': 0, 'yes': 1},
+        'Decreased in close visual acuity': {'no': 0, 'yes': 1},
+        'Urinalysis (hematuria)': {'no': 0, 'yes': 1},
+        'Urinalysis leukocyturia)': {'no': 0, 'yes': 1},
+        'Urinalysis (glycosuria)': {'no': 0},
+        'Urinalysis (proteinuria)': {'no': 0},
+        'Urinalysis (positive nitrite test)': {'no': 0},
+        'Abnormal urinalysis': {'no': 0, 'yes': 1},
+        'Vaccination up to date': {'no': 0, 'yes': 1},
+        'Control examination needed': {'no': 0, 'yes': 1},
+        'Anxiety symptoms': {'no': 0, 'yes': 1},
+        'Panic attack symptoms': {'no': 0, 'yes': 1},
+        'Depressive symptoms': {'no': 0, 'yes': 1},
+        'Cigarette smoker (5 levels)': {'no': 0, 'regularly': 1, 'occasionally': 2, 'frequently': 3, 'heavily': 4},
+        'Cigarette smoker (3 levels)': {'no': 0, 'occasionally to regularly': 1, 'frequently to heavily': 2},
+        'Drinker (3 levels)': {'no': 0, 'occasionally': 1, 'regularly': 2},
+        'Drinker (2 levels)': {'no or occasionally': 0, 'regularly to heavily': 1},
+        'Binge drinking': {'no': 0, 'yes': 1},
+        'Marijuana use': {'no': 0, 'yes': 1},
+        'Other recreational drugs': {'no': 0, 'yes': 1}
+    }
+
+    # Apply mapping to non-numeric columns
+    for column, map_dict in mapping.items():
+        df[column] = df[column].map(map_dict)
+    df = df.astype(float)
+    X = df.drop(columns=['Depressive symptoms'])
+    Y = df['Depressive symptoms']
+    X = X.to_numpy()
+    Y = Y.to_numpy()
+    return X, Y, df.columns, len(df.columns)-1
+
+
 def import_breast():
     from ucimlrepo import fetch_ucirepo
 
@@ -362,11 +447,10 @@ def import_breast():
     y[y == 'R'] = 1
     y[y == 'N'] = 0
     X[X == 'nan'] = 0
-    X=np.nan_to_num(X, nan=0)
-    y=y.squeeze()
-    y=y.tolist()
-    y=np.array(y)
-
+    X = np.nan_to_num(X, nan=0)
+    y = y.squeeze()
+    y = y.tolist()
+    y = np.array(y)
 
     return X, y, breast_cancer_wisconsin_prognostic.metadata.num_features, breast_cancer_wisconsin_prognostic.metadata.num_features
 
