@@ -1,5 +1,4 @@
 import shutil
-
 import torch.nn
 from collections import deque
 from typing import List, Tuple
@@ -33,7 +32,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=150,
+                    default=50,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -81,7 +80,7 @@ parser.add_argument("--lr_decay_factor",
                     help="LR decay factor")
 parser.add_argument("--val_interval",
                     type=int,
-                    default=100,
+                    default=200,
                     help="Interval for calculating validation reward and saving model")
 
 FLAGS = parser.parse_args(args=[])
@@ -381,6 +380,60 @@ def test(env, agent, input_dim, output_dim):
 
 
 #
+
+# def test(env, agent, input_dim, output_dim):
+#     total_steps = 0
+#     mask_list = []
+#     """ Computes performance on test data """
+#
+#     print('Loading best networks')
+#     env.guesser, agent.dqn = load_networks(i_episode='best', env=env, input_dim=input_dim, output_dim=output_dim)
+#     y_hat_test = np.zeros(len(env.y_test))
+#     print('Computing predictions on test data')
+#     n_test = len(env.X_test)
+#     for i in range(n_test):
+#         number_of_steps = 0
+#         state = env.reset(mode='test',
+#                           patient=i,
+#                           train_guesser=False)
+#         mask = env.reset_mask()
+#         t = 0
+#         done = False
+#         while t < env.episode_length and not done:
+#             number_of_steps += 1
+#             # select action from policy
+#             if t == 0:
+#                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='test')
+#             else:
+#                 action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
+#             mask[action] = 0
+#             # take the action
+#             state, reward, done, guess = env.step(action, mask, mode='test')
+#
+#             if guess != -1:
+#                 y_hat_test[i] = env.guess
+#             t += 1
+#
+#         if guess == -1:
+#             a = agent.output_dim - 1
+#             s2, r, done, info = env.step(a, mask)
+#             y_hat_test[i] = env.guess
+#             total_steps += number_of_steps
+#             # create list of all the masks
+#
+#         not_binary_tensor = 1 - mask
+#         mask_list.append(not_binary_tensor)
+#
+#     intersect, union = check_intersecion_union(mask_list)
+#
+#     # Calculate regression metrics
+#     mse = np.mean((env.y_test - y_hat_test) ** 2)
+#     mae = np.mean(np.abs(env.y_test - y_hat_test))
+#     print('Test MSE: {:1.3f}'.format(mse))
+#     print('Test MAE: {:1.3f}'.format(mae))
+#     print('Average number of steps: ', np.round(total_steps / n_test, 3))
+#     return mse, intersect, union
+
 def check_intersecion_union(mask_list):
     # Convert the list of tensors to a 2D tensor
     selected_features_tensor = torch.stack(mask_list)
@@ -457,9 +510,7 @@ def show_sample_paths(n_patients, env, agent):
                                                                                                             guess,
                                                                                                             env.probs[
                                                                                                                 guess],
-                                                                                                            guess,
-                                                                                                            env.y_test[
-                                                                                                                idx]))
+                                                                                                            guess,                                                                                                      env.y_test[                                                                                                            idx]))
 
 
 def val(i_episode: int,
@@ -508,6 +559,55 @@ def val(i_episode: int,
         save_networks(i_episode, env, agent, acc)
         save_networks(i_episode='best', env=env, agent=agent)
     return acc
+#
+# def val(i_episode: int,
+#         best_val_acc: float, env, agent) -> float:
+#     """ Compute performance on validation set and save current models """
+#
+#     print('Running validation')
+#     y_hat_val = np.zeros(len(env.y_val))
+#     mask_list = []
+#
+#     for i in range(len(env.X_val)):
+#         state = env.reset(mode='val',
+#                           patient=i,
+#                           train_guesser=False)
+#         mask = env.reset_mask()
+#         t = 0
+#         done = False
+#         while t < env.episode_length and not done:
+#             # select action from policy
+#             if t == 0:
+#                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='val')
+#             else:
+#                 action = agent.get_action(state, env, eps=0, mask=mask, mode='val')
+#
+#             mask[action] = 0
+#             # take the action
+#             state, reward, done, guess = env.step(action, mask, mode='val')
+#             if guess != -1:
+#                 y_hat_val[i] = guess
+#             t += 1
+#
+#         if guess == -1:
+#             a = agent.output_dim - 1
+#             s2, r, done, info = env.step(a, mask)
+#             y_hat_val[i] = env.guess
+#             # create list of all the masks
+#         mask_list.append(mask)
+#
+#     # Calculate regression metrics
+#     mse = np.mean((env.y_val - y_hat_val) ** 2)
+#     mae = np.mean(np.abs(env.y_val - y_hat_val))
+#     print('Validation MSE: {:1.3f}'.format(mse))
+#     print('Validation MAE: {:1.3f}'.format(mae))
+#
+#     if mse <= best_val_acc:
+#         print('New best loss achieved, saving best model')
+#         save_networks(i_episode, env, agent, mse)
+#         save_networks(i_episode='best', env=env, agent=agent)
+#     return mse
+#
 
 
 def main():

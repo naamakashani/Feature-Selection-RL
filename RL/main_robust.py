@@ -31,7 +31,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=50,
+                    default=15,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -206,9 +206,6 @@ def epsilon_annealing(initial_epsilon, min_epsilon, anneal_steps, current_step):
     return epsilon
 
 
-
-
-
 def save_networks(i_episode: int, env, agent,
                   val_acc=None) -> None:
     """ A method to save parameters of guesser and dqn """
@@ -238,9 +235,6 @@ def save_networks(i_episode: int, env, agent,
     torch.save(agent.dqn.cpu().state_dict(), dqn_save_path + '~')
     agent.dqn.to(device=device)
     os.rename(dqn_save_path + '~', dqn_save_path)
-
-
-
 
 
 def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
@@ -313,15 +307,11 @@ def save_plot_step_epoch(steps):
 def test(env, agent, input_dim, output_dim):
     total_steps = 0
     mask_list = []
-    """ Computes performance nad test data """
-
     print('Loading best networks')
     env.guesser, agent.dqn = load_networks(i_episode='best', env=env, input_dim=input_dim, output_dim=output_dim)
     y_hat_test = np.zeros(len(env.y_test))
-    print('Computing predictions of test data')
     n_test = len(env.X_test)
     for i in range(n_test):
-        number_of_steps = 0
         state = env.reset(mode='test',
                           patient=i,
                           train_guesser=False)
@@ -329,7 +319,6 @@ def test(env, agent, input_dim, output_dim):
         t = 0
         done = False
         while t < env.episode_length and not done:
-            number_of_steps += 1
             # select action from policy
             if t == 0:
                 action = agent.get_action_not_guess(state, env, eps=0, mask=mask, mode='test')
@@ -338,30 +327,29 @@ def test(env, agent, input_dim, output_dim):
             mask[action] = 0
             # take the action
             state, reward, done, guess = env.step(action, mask, mode='test')
-
             if guess != -1:
                 y_hat_test[i] = env.guess
+                total_steps += t
+                break
             t += 1
 
         if guess == -1:
             a = agent.output_dim - 1
             s2, r, done, info = env.step(a, mask)
             y_hat_test[i] = env.guess
-            total_steps += number_of_steps
-            # create list of all the masks
+            total_steps += t
 
         not_binary_tensor = 1 - mask
         mask_list.append(not_binary_tensor)
 
     intersect, union = check_intersecion_union(mask_list)
-
     C = confusion_matrix(env.y_test, y_hat_test)
-    print('confusion matrix: ')
     print(C)
     acc = np.sum(np.diag(C)) / len(env.y_test)
+    steps = np.round(total_steps / n_test, 3)
     print('Test accuracy: ', np.round(acc, 3))
-    print('Average number of steps: ', np.round(total_steps / n_test, 3))
-    return acc, intersect, union
+    print('Average number of steps: ', steps)
+    return acc, intersect, union, steps
 
 
 #
@@ -388,21 +376,12 @@ def check_intersecion_union(mask_list):
 
 def show_sample_paths(n_patients, env, agent):
     """A method to run episodes on randomly chosen positive and negative test patients, and print trajectories to console  """
-
-    # load best performing networks
     print('Loading best networks')
     input_dim, output_dim = get_env_dim(env)
     env.guesser, agent.dqn = load_networks(i_episode='best', env=env, input_dim=input_dim, output_dim=output_dim)
-    mask_list = []
     for i in range(n_patients):
         print('Starting new episode with a new test patient')
-        # choose random number form 0 to len(env.X_test)
         idx = np.random.randint(0, len(env.X_test))
-
-        # if i % 2 == 0:
-        #     idx = np.random.choice(np.where(env.y_test == 1)[0])
-        # else:
-        #     idx = np.random.choice(np.where(env.y_test == 2)[0])
         state = env.reset(mode='test',
                           patient=idx,
                           train_guesser=False)
@@ -411,15 +390,11 @@ def show_sample_paths(n_patients, env, agent):
 
         # run episode
         for t in range(int(env.episode_length)):
-
-            # select action from policy
             action = agent.get_action(state, env, eps=0, mask=mask, mode='test')
             mask[action] = 0
-
             if action != env.guesser.features_size:
                 print('Step: {}, Question: '.format(t + 1), env.guesser.question_names[action], ', Answer: ',
                       env.X_test[idx, action])
-
             # take the action
             state, reward, done, guess = env.step(action, mask, mode='test')
 
@@ -436,7 +411,6 @@ def show_sample_paths(n_patients, env, agent):
 
         if guess == -1:
             state, reward, done, guess = env.step(agent.output_dim - 1, mask, mode='test')
-
             print('Step: {}, Ready to make a guess: Prob({})={:1.3f}, Guess: y={}, Ground truth: {}'.format(t + 1,
                                                                                                             guess,
                                                                                                             env.probs[
@@ -486,7 +460,6 @@ def val(i_episode: int,
     confmat = confusion_matrix(env.y_val, y_hat_val)
     acc = np.sum(np.diag(confmat)) / len(env.y_val)
     print('Validation accuracy: {:1.3f}'.format(acc))
-
     if acc >= best_val_acc:
         print('New best acc acheievd, saving best model')
         save_networks(i_episode, env, agent, acc)
@@ -512,7 +485,6 @@ def main():
     # store best result
     best_val_acc = 0
     val_list = []
-
     # counter of validation trials with no improvement, to determine when to stop training
     val_trials_without_improvement = 0
     replay_memory = ReplayMemory(FLAGS.capacity)
@@ -521,11 +493,9 @@ def main():
     train_guesser = False
     i = 0
     rewards_list = []
-    steps = []
-
     train_dqn = True
     train_guesser = False
-    
+
     while val_trials_without_improvement < FLAGS.val_trials_wo_im:
         eps = epsilon_annealing(FLAGS.initial_epsilon, FLAGS.min_epsilon, FLAGS.anneal_steps, i)
         # play an episode
@@ -537,7 +507,6 @@ def main():
                                  train_dqn=train_dqn,
                                  train_guesser=train_guesser, mode='training')
         rewards_list.append(reward)
-        steps.append(t)
         if i % FLAGS.val_interval == 0 and i > 100:
             # compute performance on validation set
             new_best_val_acc = val(i_episode=i,
@@ -555,17 +524,9 @@ def main():
             agent.update_target_dqn()
         i += 1
 
-    acc, intersect, unoin = test(env, agent, input_dim, output_dim)
-    steps = np.mean(steps)
+    acc, intersect, unoin, steps = test(env, agent, input_dim, output_dim)
     show_sample_paths(6, env, agent)
-    return acc, steps, i, intersect, unoin
-
-    # save_plot_acuuracy_epoch(val_list)
-    # save_plot_reward_epoch(rewards_list)
-    # check the avergae number of steps
-    #
-    # save_plot_step_epoch(steps)
-    # show_sample_paths(6, env, agent)
+    return acc, i, intersect, unoin, steps
 
 
 if __name__ == '__main__':
@@ -578,20 +539,20 @@ if __name__ == '__main__':
     union_sum = 0
 
     for i in range(10):
-        acc, steps, epochs, intersect, union = main()
-        print('acc:', acc, 'steps:', steps, 'epochs:', epochs, 'intersect:', intersect, 'union:', union)
+        acc, epochs, intersect, union, steps = main()
+        print('acc:', acc, 'epochs:', epochs, 'intersect:', intersect, 'union:', union, 'steps:', steps)
         acc_sum += acc
         acc_list.append(acc)
-        steps_sum += steps
         epochs_sum += epochs
         intersect_sum += intersect
         union_sum += union
+        steps_sum += steps
 
     acc_std = np.std(acc_list)
     acc_mean = np.mean(acc_list)
     print('The mean accuracy is: {:1.3f} and the standard diviation is: {:1.3f}'.format(acc_mean, acc_std))
     print('average accuracy: ', acc_sum / 10)
-    print('average steps: ', steps_sum / 10)
     print('average epochs: ', epochs_sum / 10)
     print('average intersect: ', intersect_sum / 10)
     print('average union: ', union_sum / 10)
+    print('average steps: ', steps_sum / 10)

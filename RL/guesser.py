@@ -21,7 +21,7 @@ parser.add_argument("--directory",
                     help="Directory for saved models")
 parser.add_argument("--batch_size",
                     type=int,
-                    default=16,
+                    default=256,
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
@@ -29,11 +29,11 @@ parser.add_argument("--num_epochs",
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
-                    default=64,
+                    default=32,
                     help="Hidden dimension")
 parser.add_argument("--hidden-dim2",
                     type=int,
-                    default=128,
+                    default=64,
                     help="Hidden dimension")
 parser.add_argument("--lr",
                     type=float,
@@ -118,6 +118,36 @@ def multiply_samples_with_noise(X, Y, noise_std=0.01):
     return X_multiplied_noisy, Y_mul
 
 
+def augment_data(X, Y, num_augmentations=50, noise_level=0.1):
+    """
+    Augment data by duplicating and adding Gaussian noise.
+
+    Parameters:
+    X (numpy.ndarray): Original feature data.
+    Y (numpy.ndarray): Original labels.
+    num_augmentations (int): Number of times to augment each sample.
+    noise_level (float): Standard deviation of Gaussian noise to add.
+
+    Returns:
+    X_augmented (numpy.ndarray): Augmented feature data.
+    Y_augmented (numpy.ndarray): Augmented labels.
+    """
+    X_augmented = []
+    Y_augmented = []
+
+    for i in range(num_augmentations):
+        noise = np.random.normal(0, noise_level, X.shape)
+        X_noisy = X + noise
+        X_augmented.append(X_noisy)
+        Y_augmented.append(Y)
+
+    # Concatenate the original data with the augmented data
+    X_augmented = np.vstack([X] + X_augmented)
+    Y_augmented = np.hstack([Y] + Y_augmented)
+
+    return X_augmented, Y_augmented
+
+
 class Guesser(nn.Module):
     """
     implements a net that guesses the outcome given the state
@@ -128,9 +158,11 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_student()
+        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
+        self.cost= utils.load_cost()
         self.X, self.y = balance_class(self.X, self.y)
-        self.X, self.y = multiply_samples_with_noise(self.X, self.y)
+        # self.X, self.y = augment_data(self.X, self.y, num_augmentations=50, noise_level=0.1)
+        # self.X, self.y = multiply_samples_with_noise(self.X, self.y)
 
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
@@ -164,6 +196,8 @@ class Guesser(nn.Module):
         self.path_to_save = os.path.join(os.getcwd(), 'model_guesser')
 
     def forward(self, x):
+        #replace NaN with 0
+        x = torch.where(torch.isnan(x), torch.zeros_like(x), x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -199,7 +233,7 @@ def mask(input: np.array) -> np.array:
         for i in range(input.shape[0]):
             # choose a random number between 0 and 1
             # fraction = np.random.uniform(0, 1)
-            fraction = 0.4
+            fraction = 0.2
             if (np.random.rand() < fraction):
                 input[i] = 0
         return input
@@ -207,7 +241,7 @@ def mask(input: np.array) -> np.array:
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
                 # fraction = np.random.uniform(0, 1)
-                fraction = 0.4
+                fraction = 0.2
                 if np.random.rand() < fraction:
                     input[j][i] = 0
         return input
@@ -407,7 +441,7 @@ def main():
 
     X_train, X_test, y_train, y_test = train_test_split(model.X,
                                                         model.y,
-                                                        test_size=0.05,
+                                                        test_size=0.2,
                                                         random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_train,
                                                       y_train,

@@ -15,6 +15,18 @@ from sklearn.tree import DecisionTreeClassifier
 import csv
 import pandas as pd
 import torch
+import scipy.io
+
+def load_tox_171():
+    # Load the .mat file
+    mat = scipy.io.loadmat(r'C:\Users\kashann\PycharmProjects\choiceMira\data\colon.mat')
+    # Display the keys in the .mat file
+    X=mat['X']
+    y=mat['Y']
+    y=y.reshape(-1)
+    #change -1 label to 0
+    y[y == -1] = 0
+    return X, y, y, len(X[0])
 def add_noise(X, noise_std=0.01):
     """
     Add Gaussian noise to the input features.

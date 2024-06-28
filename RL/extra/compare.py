@@ -36,9 +36,9 @@ def get_selected_features(tree, X):
 
 def decision_tree():
     # Splitting data into training and testing sets
-    X, y, _, number_of_features = utils.load_csv_data()
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    clf = DecisionTreeClassifier(max_depth=2)  # You can specify hyperparameters here
+    X, y, _, number_of_features = utils.load_diabetes()
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+    clf = DecisionTreeClassifier()
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
@@ -50,9 +50,44 @@ def decision_tree():
     # Calculate intersection and union of selected paths
     intersection = set.intersection(*selected_paths)
     union = set.union(*selected_paths)
+    return accuracy, clf.get_depth(), len(intersection),len(union)
 
-    print("Intersection of selected paths DT:", intersection)
-    print("Union of selected paths DT:", union)
+def check_DT():
+    total_accuracy = 0
+    total_depth = 0
+    total_intersection =0
+    total_union = 0
+    list_accuracy = []
+    total_depth_list = []
+    total_intersection_lies=[]
+    total_union_lies = []
+    for i in range(10):
+        #calc the mean of the accuracy and depth
+        accuracy, depth, intersection, union = decision_tree()
+        list_accuracy.append(accuracy)
+        total_depth_list.append(depth)
+        total_intersection_lies.append(intersection)
+        total_union_lies.append(union)
+        total_accuracy += accuracy
+        total_depth += depth
+        total_intersection += intersection
+        total_union += union
+    print("Average accuracy: ", total_accuracy/10)
+    print("Average depth: ", total_depth/10)
+    print("Average intersection: ", total_intersection/10)
+    print("Average union: ", total_union/10)
+    #print standard dev of list_accuracy
+    print("Standard deviation of accuracy: ", np.std(list_accuracy))
+    print ("Standard deviation of depth: ", np.std(total_depth_list))
+    print("Standard deviation of intersection: ", np.std(total_intersection_lies))
+    print("Standard deviation of union: ", np.std(total_union_lies))
+
+
+
+
+
+
+
 
 
 
@@ -196,8 +231,9 @@ def XGboost_new():
 
 
 def main():
-    XGboost_new()
-    decision_tree()
+    # XGboost_new()
+    check_DT()
+
 
 
 

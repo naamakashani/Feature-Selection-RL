@@ -16,8 +16,8 @@ import csv
 import pandas as pd
 import torch
 from sklearn.utils import resample
-
-
+from ucimlrepo import fetch_ucirepo
+import scipy.io
 def add_noise(X, noise_std=0.01):
     """
     Add Gaussian noise to the input features.
@@ -84,6 +84,61 @@ def load_FS_data():
     y = outcomes['targets']
     cost = outcomes['costs']
     return X, y, cost, len(X[0])
+
+def load_ucimlrepo():
+    # fetch dataset
+    diabetic_retinopathy_debrecen = fetch_ucirepo(id=329)
+    X = diabetic_retinopathy_debrecen.data.features.to_numpy()
+    y = diabetic_retinopathy_debrecen.data.targets.to_numpy()
+    y = y.squeeze()
+    y = y.tolist()
+    y = np.array(y)
+    return X, y, diabetic_retinopathy_debrecen.metadata.num_features, diabetic_retinopathy_debrecen.metadata.num_features
+
+
+def load_fetal():
+    file_path= r'C:\Users\kashann\PycharmProjects\choiceMira\data\fetal_health_None.csv'
+    df = pd.read_csv(file_path)
+    Y = df['fetal_health'].to_numpy().reshape(-1)
+    X = df.drop(df.columns[-1], axis=1).to_numpy()
+    return X,Y,Y,len(X[0])
+
+def load_madelon():
+    madelon_train = r'C:\Users\kashann\PycharmProjects\choiceMira\data\MADELON\madelon_train.data'
+    madelon_train_labels = r'C:\Users\kashann\PycharmProjects\choiceMira\data\MADELON\madelon_train.labels'
+    madelon_valid = r'C:\Users\kashann\PycharmProjects\choiceMira\data\MADELON\madelon_valid.data'
+    madelon_valid_labels = r'C:\Users\kashann\PycharmProjects\choiceMira\data\MADELON\madelon_valid.labels'
+    madelon_train_df = pd.read_csv(madelon_train, delimiter=' ', header=None)
+    madelon_train_labels_df = pd.read_csv(madelon_train_labels, delimiter=' ', header=None)
+    madelon_valid_df = pd.read_csv(madelon_valid, delimiter=' ', header=None)
+    madelon_valid_labels_df = pd.read_csv(madelon_valid_labels, delimiter=' ', header=None)
+    #concat train and valid
+    X = pd.concat([madelon_train_df, madelon_valid_df])
+    y = pd.concat([madelon_train_labels_df, madelon_valid_labels_df])
+    for i in range(1, len(X)):
+        for j in range(len(X.columns)):
+            if np.random.rand() < 0.2:
+                X.iloc[i, j] = np.nan
+    #remove the last colum in X
+    X = X.iloc[:, :-1]
+    X=X.to_numpy()
+    y=y.to_numpy()
+    y=y.reshape(-1)
+    #change -1 label to 0
+    y[y == -1] = 0
+    return X, y, y, len(X[0])
+
+def load_colon():
+    # Load the .mat file
+    mat = scipy.io.loadmat(r'C:\Users\kashann\PycharmProjects\choiceMira\data\colon.mat')
+    # Display the keys in the .mat file
+    X=mat['X']
+    y=mat['Y']
+    y=y.reshape(-1)
+    #change -1 label to 0
+    y[y == -1] = 0
+    return X, y, y, len(X[0])
+
 
 
 def load_data_labels():
@@ -360,6 +415,19 @@ def load_sonar():
     print('loaded data,  {} rows, {} columns'.format(n, d))
     return X, y, question_names, len(columns_without_label)
 
+def load_alzhimer():
+    df = pd.read_csv("C:\\Users\\kashann\\PycharmProjects\\choiceMira\\data\\alzhimer.csv")
+    df_dropped = df.drop(df.columns[0], axis=1)
+    df_dropped.iloc[:, -1] = df_dropped.iloc[:, -1].map({'P': 1, 'H': 0})
+    Y = df_dropped.iloc[:, -1]
+    df_dropped = df_dropped.drop(df_dropped.columns[-1], axis=1)
+    df_normalized = df_dropped.apply(lambda x: 2 * ((x - x.min()) / (x.max() - x.min())) - 1)
+
+    X = df_normalized.astype(float)
+    X = X.to_numpy()
+    Y = Y.to_numpy()
+    return X, Y, df_normalized.columns, len(df_normalized.columns)
+
 
 def load_student():
     df = pd.read_csv("C:\\Users\\kashann\\PycharmProjects\\choiceMira\\ehrData\\student.csv")
@@ -467,6 +535,9 @@ def create_data():
     # Split the data into training and testing sets
     x = np.column_stack((x1_values, x2_values, x3_values))
     return x, labels, x1_values, 3
+
+
+
 
 
 def create():
@@ -698,17 +769,17 @@ def load_csv_data():
 
 
 def load_diabetes():
+    file_path = r'C:\Users\kashann\PycharmProjects\choiceMira\data\diabetes_None.csv'
     data = []
     labels = []
-    file_path = 'C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\diabetes\\diabetes_prediction_dataset.csv'
     df = pd.read_csv(file_path)
-    df_1 = df[df['diabetes'] == 1]
-    df_0 = df[df['diabetes'] == 0].sample(frac=0.092)
-    df_all = pd.concat([df_0, df_1])
+    # df_1 = df[df['diabetes'] == 1]
+    # df_0 = df[df['diabetes'] == 0].sample(frac=0.092)
+    # df_all = pd.concat([df_0, df_1])
 
     # save df clean to csv
     file_path_clean = 'C:\\Users\\kashann\\PycharmProjects\\choiceMira\\RL\\extra\\diabetes\\diabetes_clean.csv'
-    df_all.to_csv(file_path_clean, index=False)
+    df.to_csv(file_path_clean, index=False)
     # Open the CSV file
     with open(file_path_clean, newline='') as csvfile:
         # Create a CSV reader
@@ -739,28 +810,45 @@ def load_diabetes():
             if columns_without_label[4] == "ever":
                 columns_without_label[4] = 5
             for i in range(len(columns_without_label)):
-                columns_without_label[i] = float(columns_without_label[i])
+                if columns_without_label[i] != '':
+                    columns_without_label[i] = float(columns_without_label[i])
+                else:
+                    columns_without_label[i] = 0
 
             data.append(columns_without_label)
 
-            labels.append(int(columns[-1]))
+            labels.append(int(float(columns[-1])))
 
     # Convert zero_list to a NumPy array
     X = np.array(data)
     y = np.array(labels)
-    n, d = X.shape
-    # standardize features
-    # scaler = MinMaxScaler()
-    # X = scaler.fit_transform(X) * 2 - 1
-    class_names = [0, 1]
-    print('loaded data,  {} rows, {} columns'.format(n, d))
+
     return X, y, question_names, len(columns_without_label)
 
+
+def create_demo():
+    np.random.seed(34)
+    Xs1 = np.random.normal(loc=1,scale=0.5,size=(300,5))
+    Ys1 = -2*Xs1[:,0]+1*Xs1[:,1]-0.5*Xs1[:,2]
+    Xs2 = np.random.normal(loc=-1,scale=0.5,size=(300,5))
+    Ys2 = -0.5*Xs2[:,2]+1*Xs2[:,3]-2*Xs2[:,4]
+    X_data = np.concatenate((Xs1, Xs2), axis=0)
+    Y_data = np.concatenate((Ys1.reshape(-1, 1), Ys2.reshape(-1, 1)), axis=0)
+    Y_data = Y_data-Y_data.min()
+    Y_data=Y_data/Y_data.max()
+    case_labels = np.concatenate((np.array([1] * 300), np.array([2] * 300)))
+    Y_data = np.concatenate((Y_data, case_labels.reshape(-1, 1)), axis=1)
+    Y_data = Y_data[:, 0].reshape(-1, 1)
+    return X_data,Y_data,5,5
 
 def diabetes_prob_actions():
     cost_list = np.array(np.ones(9))
     return torch.from_numpy(np.array(cost_list))
+def load_cost():
+    #create numpy array of costs with initalize values
 
+    cost_list = np.array([1,1,3,1,1,2,3,3])
+    return torch.from_numpy(np.array(cost_list))
 
 def prob_rec():
     cost_list = np.array(np.ones(3))

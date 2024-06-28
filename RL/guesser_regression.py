@@ -21,7 +21,7 @@ parser.add_argument("--directory",
                     help="Directory for saved models")
 parser.add_argument("--batch_size",
                     type=int,
-                    default=64,
+                    default=256,
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
@@ -29,11 +29,11 @@ parser.add_argument("--num_epochs",
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
-                    default=64,
+                    default=32,
                     help="Hidden dimension")
 parser.add_argument("--hidden-dim2",
                     type=int,
-                    default=128,
+                    default=64,
                     help="Hidden dimension")
 parser.add_argument("--lr",
                     type=float,
@@ -51,30 +51,6 @@ parser.add_argument("--val_trials_wo_im",
 FLAGS = parser.parse_args(args=[])
 
 
-
-
-def add_noise(X, noise_std=0.01):
-    """
-    Add Gaussian noise to the input features.
-
-    Parameters:
-    - X: Input features (numpy array).
-    - noise_std: Standard deviation of the Gaussian noise.
-
-    Returns:
-    - X_noisy: Input features with added noise.
-
-    X_noisy = X.copy()
-    X_noisy= pd.DataFrame(X_noisy)
-    for col in X_noisy.columns:
-        categories = X_noisy[col].cat.categories
-        noise = np.random.randint(-1, 2, size=len(X))
-        X_noisy[col] = (X_noisy[col].cat.codes + noise) % len(categories)
-        X_noisy[col] = X_noisy[col].astype('category').cat.set_categories(categories)
-    return X_noisy
-    """
-
-
 def add_noise(X, noise_std=0.01):
     """
     Add Gaussian noise to the input features.
@@ -89,33 +65,6 @@ def add_noise(X, noise_std=0.01):
     noise = np.random.normal(loc=0, scale=noise_std, size=X.shape)
     X_noisy = X + noise
     return X_noisy
-
-
-def balance_class_multi(X, y, noise_std=0.01):
-    unique_classes, class_counts = np.unique(y, return_counts=True)
-    max_class_count = np.max(class_counts)
-
-    # Calculate the difference in sample counts for each class
-    count_diff = max_class_count - class_counts
-
-    # Initialize arrays to store balanced data
-    X_balanced = X.copy()
-    y_balanced = y.copy()
-
-    # Add noise to the features of the minority classes to balance the dataset
-    for minority_class, diff in zip(unique_classes, count_diff):
-        if diff > 0:
-            # Get indices of samples belonging to the current minority class
-            minority_indices = np.where(y == minority_class)[0]
-
-            # Randomly sample indices from the minority class to add noise
-            noisy_indices = np.random.choice(minority_indices, diff, replace=True)
-
-            # Add noise to the features of the selected samples
-            X_balanced = np.concatenate([X_balanced, add_noise(X[noisy_indices], noise_std)], axis=0)
-            y_balanced = np.concatenate([y_balanced, y[noisy_indices]], axis=0)
-
-    return X_balanced, y_balanced
 
 
 def balance_class(X, y, noise_std=0.01):
@@ -145,40 +94,58 @@ def balance_class(X, y, noise_std=0.01):
     return X_balanced, y_balanced
 
 
-def create_data():
-    # Number of points to generate
-    num_points = 100
-    # Generate random x values
-    x1_values = np.random.uniform(low=-30, high=30, size=num_points)
-    x2_values = np.random.uniform(low=-30, high=30, size=num_points)
-    x3_values = np.random.uniform(low=-30, high=30, size=num_points)
-    # Create y values based on the decision boundary if x+y > 9 then 1 else 0
-    labels = np.where((x1_values + x2_values + x3_values > 10), 1, 0)
-    # Split the data into training and testing sets
-    x = np.column_stack((x1_values, x2_values, x3_values))
-    return x, labels, x1_values, 3
+def multiply_samples_with_noise(X, Y, noise_std=0.01):
+    """
+    Multiply samples of input features with noise.
+
+    Parameters:
+    - X: Input features (numpy array).
+    - Y: Target values (numpy array).
+    - num_samples: Number of times to multiply the samples.
+    - noise_std: Standard deviation of the Gaussian noise.
+
+    Returns:
+    - X_multiplied_noisy: Multiplied input features with added noise.
+    - Y: Target values (unchanged).
+    """
+    X_multiplied_noisy = [X]
+    Y_mul = np.concatenate([Y, Y])
+
+    X_noisy = add_noise(X, noise_std)
+    X_multiplied_noisy.append(X_noisy)
+    X_multiplied_noisy = np.concatenate(X_multiplied_noisy)
+
+    return X_multiplied_noisy, Y_mul
 
 
-def create():
-    # Set a random seed for reproducibility
+def augment_data(X, Y, num_augmentations=50, noise_level=0.1):
+    """
+    Augment data by duplicating and adding Gaussian noise.
 
-    # Number of points to generate
-    num_points = 100
+    Parameters:
+    X (numpy.ndarray): Original feature data.
+    Y (numpy.ndarray): Original labels.
+    num_augmentations (int): Number of times to augment each sample.
+    noise_level (float): Standard deviation of Gaussian noise to add.
 
-    # Generate random x values
-    x1_values = np.random.uniform(low=0, high=30, size=num_points)
+    Returns:
+    X_augmented (numpy.ndarray): Augmented feature data.
+    Y_augmented (numpy.ndarray): Augmented labels.
+    """
+    X_augmented = []
+    Y_augmented = []
 
-    # Create y values based on the decision boundary y=-x with some random noise
-    x2_values = -x1_values + np.random.normal(0, 2, size=num_points)
+    for i in range(num_augmentations):
+        noise = np.random.normal(0, noise_level, X.shape)
+        X_noisy = X + noise
+        X_augmented.append(X_noisy)
+        Y_augmented.append(Y)
 
-    # Create labels based on the side of the decision boundary
-    labels = np.where(x2_values > -1 * x1_values, 1, 0)
+    # Concatenate the original data with the augmented data
+    X_augmented = np.vstack([X] + X_augmented)
+    Y_augmented = np.hstack([Y] + Y_augmented)
 
-    # Create a scatter plot of the dataset with color-coded labels
-    plt.scatter(x1_values, x2_values, c=labels, cmap='viridis', marker='o', label='Data Points')
-    # Split the data into training and testing sets
-    x = np.column_stack((x1_values, x2_values))
-    return x, labels, x1_values, 3
+    return X_augmented, Y_augmented
 
 
 class Guesser(nn.Module):
@@ -192,7 +159,8 @@ class Guesser(nn.Module):
 
         super(Guesser, self).__init__()
         self.X, self.y, self.question_names, self.features_size = utils.create_demo()
-        self.X, self.y = balance_class(self.X, self.y)
+        self.cost= utils.load_cost()
+
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
             torch.nn.PReLU(),
@@ -202,32 +170,38 @@ class Guesser(nn.Module):
             torch.nn.Linear(hidden_dim1, hidden_dim2),
             torch.nn.PReLU(),
         )
-
         self.layer3 = torch.nn.Sequential(
             torch.nn.Linear(hidden_dim2, hidden_dim2),
             torch.nn.PReLU(),
         )
+        self.layer4 = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim2, hidden_dim2),
+            torch.nn.PReLU(),
+        )
 
-        # output layer
-        self.logits = nn.Linear(hidden_dim2, num_classes)
-        self.criterion = nn.CrossEntropyLoss()
+        self.layer5 = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim2, hidden_dim2),
+            torch.nn.PReLU(),
+        )
+
+        # output layer for regression
+        self.output = nn.Linear(hidden_dim2, 1)  # Single output for regression
+        self.criterion = nn.MSELoss()  # Mean Squared Error Loss for regression
         self.optimizer = torch.optim.Adam(self.parameters(),
                                           weight_decay=FLAGS.weight_decay,
-                                          lr=FLAGS.lr, )
-        self.path_to_save = os.path.join(os.getcwd(), 'model_robust_guesser')
+                                          lr=FLAGS.lr)
+        self.path_to_save = os.path.join(os.getcwd(), 'model_guesser_regression')
 
     def forward(self, x):
+        # replace NaN with 0
+        x = torch.where(torch.isnan(x), torch.zeros_like(x), x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-
-        logits = self.logits(x)
-        if logits.dim() == 2:
-            probs = F.softmax(logits, dim=1)
-        else:
-            probs = F.softmax(logits, dim=-1)
-
-        return probs
+        x = self.layer4(x)
+        x = self.layer5(x)
+        output = self.output(x)  # Get the regression output
+        return output
 
     def _to_variable(self, x: np.ndarray) -> torch.Tensor:
         """torch.Variable syntax helper
@@ -251,7 +225,7 @@ def mask(input: np.array) -> np.array:
         for i in range(input.shape[0]):
             # choose a random number between 0 and 1
             # fraction = np.random.uniform(0, 1)
-            fraction = 0.1
+            fraction = 0.2
             if (np.random.rand() < fraction):
                 input[i] = 0
         return input
@@ -259,35 +233,25 @@ def mask(input: np.array) -> np.array:
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
                 # fraction = np.random.uniform(0, 1)
-                fraction = 0.1
-                if (np.random.rand() < fraction):
+                fraction = 0.2
+                if np.random.rand() < fraction:
                     input[j][i] = 0
         return input
 
 
+
 def create_adverserial_input(inputs, labels, pretrained_model):
     input = inputs.view(inputs.shape[0], -1).float()
-
-    # Set requires_grad to True for the input tensor
-    input.requires_grad = True
-
+    input.requires_grad_(True)  # Set requires_grad for input
     # Forward pass
     output = pretrained_model(input)
     labels = torch.Tensor(labels).long()
     loss = pretrained_model.criterion(output, labels)
 
-    # L1 regularization term
-    # l1_reg = torch.tensor(0., requires_grad=True)
-    # for param in pretrained_model.parameters():
-    #     l1_reg = l1_reg + torch.norm(param, 1)
+    # Backward pass
+    loss.backward()
     #
-    # # Add regularization term to the loss
-    # loss = loss + 0.001 * l1_reg
-
-    # Compute gradients with respect to input
-    loss.backward(retain_graph=True)
-
-    # Get the gradients with respect to the input
+    # Get the gradients
     gradient = input.grad
 
     # Identify the most influential features (those with the largest absolute gradients).
@@ -297,36 +261,27 @@ def create_adverserial_input(inputs, labels, pretrained_model):
     # Zero out the most influential features.
     mask = torch.nn.functional.one_hot(max_gradients_indices, num_classes=input.shape[-1]).float()
     zeroed_input_features = input * (1 - mask)
-
     return zeroed_input_features
 
 
-def val(model, val_loader, best_val_auc=0):
-    correct = 0
-    total = 0
+def val(model, val_loader, best_val_loss=float('inf')):
+    total_loss = 0
     model.eval()
-    valid_loss = 0
     with torch.no_grad():
         for input, labels in val_loader:
             input = mask(input)
             input = input.view(input.shape[0], -1)
             input = input.float()
             output = model(input)
-            _, predicted = torch.max(output.data, 1)
-            y_pred = []
-            for y in labels:
-                y = torch.Tensor(y).long()
-                y_pred.append(y)
-            labels = torch.Tensor(np.array(y_pred)).long()
+            labels = labels.float().view(-1, 1)  # Reshape labels for regression
             loss = model.criterion(output, labels)
-            valid_loss += loss.item()
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-    accuracy = correct / total
-    print(f'Validation Accuracy: {accuracy:.2f}')
-    if accuracy >= best_val_auc:
+            total_loss += loss.item()
+    avg_loss = total_loss / len(val_loader)
+    print(f'Validation Loss: {avg_loss:.4f}')
+    if avg_loss <= best_val_loss:
         save_model(model)
-    return accuracy
+    return avg_loss
+
 
 
 def test(test_loader, path_to_save):
@@ -344,24 +299,19 @@ def test(test_loader, path_to_save):
             images = images.view(images.shape[0], -1)
             images = images.float()
             output = model(images)
-            _, predicted = torch.max(output.data, 1)
 
-            # Append true and predicted labels to calculate confusion matrix
+            # Append true and predicted labels for later analysis
             y_true.extend(labels.numpy())  # Assuming labels is a numpy array
-            y_pred.extend(predicted.numpy())  # Assuming predicted is a numpy array
+            y_pred.extend(output.numpy().flatten())  # Assuming output is a numpy array
 
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
 
-    # Calculate and print confusion matrix
-    conf_matrix = confusion_matrix(y_true, y_pred)
-    print("Confusion Matrix:")
-    print(conf_matrix)
-
-    # Calculate accuracy
-    accuracy = np.sum(np.diag(conf_matrix)) / np.sum(conf_matrix)
-    print(f'Test Accuracy: {accuracy:.2f}')
-
+    # Calculate and print regression metrics
+    mse = np.mean((y_true - y_pred) ** 2)
+    mae = np.mean(np.abs(y_true - y_pred))
+    print(f'Mean Squared Error: {mse:.4f}')
+    print(f'Mean Absolute Error: {mae:.4f}')
 
 def train_model(model,
                 nepochs, train_loader, val_loader):
@@ -381,28 +331,19 @@ def train_model(model,
     for i in range(1, nepochs):
         running_loss = 0
         for input, labels in train_loader:
-            # send images and labels and model to adversarial training
-            if (i > 100 and i < 120) or (i > 180 and i < 200) :
-                input = create_adverserial_input(input, labels, model)
-            else:
-                input = mask(input)
-
+            input = mask(input)
             input = input.view(input.shape[0], -1).float()
             model.train()
             model.optimizer.zero_grad()
             output = model(input)
-            y_pred = []
-            for y in labels:
-                y = torch.Tensor(y).long()
-                y_pred.append(y)
-            labels = torch.Tensor(np.array(y_pred)).long()
+            labels = labels.float().view(-1, 1)  # Reshape labels for regression
             loss = model.criterion(output, labels)
             running_loss += loss.item()
             loss.backward()
             model.optimizer.step()
 
         training_loss_list.append(running_loss / len(train_loader))
-        print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
+        # print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
         if i % 20 == 0:
             new_best_val_auc = val(model, val_loader, best_val_auc)
             accuracy_list.append(new_best_val_auc)
@@ -412,10 +353,10 @@ def train_model(model,
             else:
                 val_trials_without_improvement += 1
             # check whether to stop training
-            # if val_trials_without_improvement == FLAGS.val_trials_wo_im:
-            #     print('Did not achieve val AUC improvement for {} trials, training is done.'.format(
-            #         FLAGS.val_trials_wo_im))
-
+            if val_trials_without_improvement == FLAGS.val_trials_wo_im:
+                print('Did not achieve val AUC improvement for {} trials, training is done.'.format(
+                    FLAGS.val_trials_wo_im))
+                break
     save_plot_acuuracy_epoch(accuracy_list, training_loss_list)
 
 
@@ -439,6 +380,7 @@ def save_plot_acuuracy_epoch(val_accuracy_list, training_loss_list):
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.grid(True)
+
     plt.tight_layout()
     plt.savefig('accuracy_loss_plot.png')
     plt.show()
@@ -472,11 +414,11 @@ def main():
 
     X_train, X_test, y_train, y_test = train_test_split(model.X,
                                                         model.y,
-                                                        test_size=0.1,
+                                                        test_size=0.2,
                                                         random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_train,
                                                       y_train,
-                                                      test_size=0.1,
+                                                      test_size=0.5,
                                                       random_state=24)
     # Convert data to PyTorch tensors
     X_tensor_train = torch.from_numpy(X_train)
@@ -498,7 +440,6 @@ def main():
     y_tensor_test = torch.Tensor(y_test)  # Assuming y_data contains integers
     dataset_test = TensorDataset(X_tensor_test, y_tensor_test)
     data_loader_test = DataLoader(dataset_test, batch_size=FLAGS.batch_size, shuffle=True)
-
     test(data_loader_test, model.path_to_save)
 
 

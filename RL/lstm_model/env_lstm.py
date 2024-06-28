@@ -14,7 +14,7 @@ class myEnv(gymnasium.Env):
 
         self.device = device
         self.embedding_dim = 10
-        self.X, self.y, self.question_names, self.features_size =load_student()
+        self.X, self.y, self.question_names, self.features_size =load_ehr()
         self.X, self.y = balance_class(self.X, self.y)
         self.guesser = Guesser(self.embedding_dim * 2)
         self.question_embedding = nn.Embedding(num_embeddings=self.features_size, embedding_dim=self.embedding_dim)
@@ -30,7 +30,7 @@ class myEnv(gymnasium.Env):
         self.optimizer_guesser = optim.Adam(self.guesser.parameters(), lr=flags.lr)
         self.optimizer_state = optim.Adam(self.state.parameters(), lr=flags.lr)
         self.optimizer_embedding = optim.Adam(self.question_embedding.parameters(), lr=flags.lr)
-        self.episode_length = self.features_size / 2
+        self.episode_length = 7
         self.count = 0
 
     def reset(self,

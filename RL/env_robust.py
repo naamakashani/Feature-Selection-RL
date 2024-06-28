@@ -53,7 +53,7 @@ class myEnv(gymnasium.Env):
         cost_list = np.array(np.ones(self.guesser.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
         # self.episode_length = self.guesser.features_size/3
-        self.episode_length = 25
+        self.episode_length = 30
         # Load pre-trained guesser network, if needed
         if load_pretrained_guesser:
             save_dir = os.path.join(os.getcwd(), flags.save_guesser_dir)

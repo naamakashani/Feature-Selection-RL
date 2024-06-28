@@ -8,33 +8,6 @@ import torch.nn.functional as F
 
 
 
-def balance_class(X, y):
-    unique_classes, class_counts = np.unique(y, return_counts=True)
-    minority_class = unique_classes[np.argmin(class_counts)]
-    majority_class = unique_classes[np.argmax(class_counts)]
-
-    # Get indices of samples belonging to each class
-    minority_indices = np.where(y == minority_class)[0]
-    majority_indices = np.where(y == majority_class)[0]
-
-    # Calculate the difference in sample counts
-    minority_count = len(minority_indices)
-    majority_count = len(majority_indices)
-    count_diff = majority_count - minority_count
-
-    # Duplicate samples from the minority class to balance the dataset
-    if count_diff > 0:
-        # Randomly sample indices from the minority class to duplicate
-        duplicated_indices = np.random.choice(minority_indices, count_diff, replace=True)
-        # Concatenate the duplicated samples to the original arrays
-        X_balanced = np.concatenate([X, X[duplicated_indices]], axis=0)
-        y_balanced = np.concatenate([y, y[duplicated_indices]], axis=0)
-    else:
-        X_balanced = X.copy()  # No need for balancing, as classes are already balanced
-        y_balanced = y.copy()
-    return X_balanced, y_balanced
-
-
 class myEnv(gymnasium.Env):
 
     def __init__(self,
@@ -45,16 +18,15 @@ class myEnv(gymnasium.Env):
         self.guesser = Guesser()
         self.device = device
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,
-                                                                                test_size=0.1)
+                                                                                test_size=0.2)
+        self.cost_list = self.guesser.cost
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
                                                                               self.y_train,
-                                                                              test_size=0.05)
+                                                                              test_size=0.5)
 
         cost_list = np.array(np.ones(self.guesser.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
-        self.episode_length=33
-        # self.episode_length = self.guesser.features_size /2
-        # Load pre-trained guesser network, if needed
+        self.episode_length = 5
         if load_pretrained_guesser:
             save_dir = os.path.join(os.getcwd(), flags.save_guesser_dir)
             guesser_filename = 'best_guesser.pth'
@@ -90,6 +62,10 @@ class myEnv(gymnasium.Env):
         asked will not be asked again.
         """
         mask = torch.ones(self.guesser.features_size + 1)
+        #if self.patient has None in feature value mask[feature] =0
+        for i in range(self.guesser.features_size):
+            if self.X_train[self.patient, i] is None:
+                mask[i] = 0
         mask = mask.to(device=self.device)
 
         return mask
@@ -113,7 +89,6 @@ class myEnv(gymnasium.Env):
 
         return self.s, self.reward, self.done, self.guess
 
-    # Update 'done' flag when episode terminates
     def terminate_episode(self):
 
         self.done = True
@@ -139,8 +114,10 @@ class myEnv(gymnasium.Env):
                 next_state[action] = self.X_val[self.patient, action]
             elif mode == 'test':
                 next_state[action] = self.X_test[self.patient, action]
-
-            self.reward = abs(self.prob_guesser(next_state) - self.prob_guesser(prev_state))
+            self.reward = (self.prob_guesser(next_state) - self.prob_guesser(prev_state))
+            # self.reward = (self.prob_guesser(next_state) - self.prob_guesser(prev_state)) * (1 / self.cost_list[action])
+            if self.reward < 0:
+                self.reward = 0
             # self.reward = .01 * np.random.rand()
             self.guess = -1
             self.done = False
@@ -174,3 +151,26 @@ class myEnv(gymnasium.Env):
                 self.guesser.optimizer.step()
 
         return self.reward
+
+
+    # def compute_reward(self, mode):
+    #     """ Compute the reward """
+    #
+    #     if mode == 'test':
+    #         return None
+    #
+    #     if self.guess == -1:  # no guess was made
+    #         return self.reward
+    #
+    #     if mode == 'training':
+    #         y_true = self.y_train[self.patient]
+    #         if self.train_guesser:
+    #             self.guesser.optimizer.zero_grad()
+    #             self.guesser.train(mode=True)
+    #             y_true_tensor = torch.tensor([y_true], dtype=torch.float32)  # Use float for regression
+    #             self.probs = self.probs.float()
+    #             self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)
+    #             self.guesser.loss.backward()
+    #             self.guesser.optimizer.step()
+    #
+    #     return self.reward
