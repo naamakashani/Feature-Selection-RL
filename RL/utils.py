@@ -128,16 +128,29 @@ def load_madelon():
     y[y == -1] = 0
     return X, y, y, len(X[0])
 
+
+import scipy.io
+import numpy as np
+
+
 def load_colon():
     # Load the .mat file
     mat = scipy.io.loadmat(r'C:\Users\kashann\PycharmProjects\choiceMira\data\colon.mat')
-    # Display the keys in the .mat file
-    X=mat['X']
-    y=mat['Y']
-    y=y.reshape(-1)
-    #change -1 label to 0
+    # Extract features X and labels y
+    X = mat['X']
+    y = mat['Y']
+    y = y.reshape(-1)
+    # Change -1 label to 0
     y[y == -1] = 0
+    df = pd.DataFrame(X)
+    for i in range(0, len(df)):
+        for j in range(len(df.columns)-1):
+            if np.random.rand() < 0.8:
+                df.iloc[i, j] = np.nan
+
+    X = df.to_numpy()
     return X, y, y, len(X[0])
+    # File path for the new data with None values
 
 
 

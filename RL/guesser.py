@@ -158,7 +158,7 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
+        self.X, self.y, self.question_names, self.features_size = utils.load_colon()
         self.cost= utils.load_cost()
         self.X, self.y = balance_class(self.X, self.y)
         # self.X, self.y = augment_data(self.X, self.y, num_augmentations=50, noise_level=0.1)
