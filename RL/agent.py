@@ -43,7 +43,7 @@ class Agent(object):
         self.target_dqn = DQN(input_dim, output_dim, hidden_dim)
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.loss_fn = torch.nn.MSELoss()
+        self.loss_fn = torch.nn.SmoothL1Loss()
         self.optim = torch.optim.Adam(self.dqn.parameters(),
                                       lr=lr,
                                       weight_decay=weight_decay)
@@ -108,7 +108,6 @@ class Agent(object):
                 # choose the second highest value
                 scores.data[0][argmax.item()] = 0
                 _, argmax = torch.max(scores.data * mask, 1)
-
             return int(argmax.item())
 
     def get_Q(self, states: np.ndarray) -> torch.FloatTensor:

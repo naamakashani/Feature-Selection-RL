@@ -3,35 +3,9 @@ import os
 from sklearn.model_selection import train_test_split
 import gymnasium
 import torch
-import RL.utils as utils
 from RL.guesser import Guesser
+import torch.nn.functional as F
 
-
-def balance_class(X, y):
-    unique_classes, class_counts = np.unique(y, return_counts=True)
-    minority_class = unique_classes[np.argmin(class_counts)]
-    majority_class = unique_classes[np.argmax(class_counts)]
-
-    # Get indices of samples belonging to each class
-    minority_indices = np.where(y == minority_class)[0]
-    majority_indices = np.where(y == majority_class)[0]
-
-    # Calculate the difference in sample counts
-    minority_count = len(minority_indices)
-    majority_count = len(majority_indices)
-    count_diff = majority_count - minority_count
-
-    # Duplicate samples from the minority class to balance the dataset
-    if count_diff > 0:
-        # Randomly sample indices from the minority class to duplicate
-        duplicated_indices = np.random.choice(minority_indices, count_diff, replace=True)
-        # Concatenate the duplicated samples to the original arrays
-        X_balanced = np.concatenate([X, X[duplicated_indices]], axis=0)
-        y_balanced = np.concatenate([y, y[duplicated_indices]], axis=0)
-    else:
-        X_balanced = X.copy()  # No need for balancing, as classes are already balanced
-        y_balanced = y.copy()
-    return X_balanced, y_balanced
 
 
 class myEnv(gymnasium.Env):
@@ -42,20 +16,19 @@ class myEnv(gymnasium.Env):
                  oversample=True,
                  load_pretrained_guesser=True):
         self.guesser = Guesser()
-        episode_length = flags.episode_length
         self.device = device
-        X, y = balance_class(self.guesser.X, self.guesser.y)
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.guesser.X, self.guesser.y,
-                                                                                test_size=0.3)
+                                                                                test_size=0.2)
+        self.cost_list = self.guesser.cost
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
                                                                               self.y_train,
-                                                                              test_size=0.05)
+                                                                              test_size=0.5)
 
-        self.episode_length = episode_length
-        self.action_probs = utils.diabetes_prob_actions()
-        # Load pre-trained guesser network, if needed
+        cost_list = np.array(np.ones(self.guesser.features_size + 1))
+        self.action_probs = torch.from_numpy(np.array(cost_list))
+        self.episode_length = 5
         if load_pretrained_guesser:
-            save_dir = os.path.join(os.getcwd(), 'model_guesser')
+            save_dir = os.path.join(os.getcwd(), flags.save_guesser_dir)
             guesser_filename = 'best_guesser.pth'
             guesser_load_path = os.path.join(save_dir, guesser_filename)
             if os.path.exists(guesser_load_path):
@@ -67,7 +40,7 @@ class myEnv(gymnasium.Env):
               mode='training',
               patient=0,
               train_guesser=True):
-        self.state = np.concatenate([np.zeros(self.guesser.features_size), np.zeros(self.guesser.features_size)])
+        self.state = np.concatenate([np.zeros(self.guesser.features_size)])
 
         if mode == 'training':
             self.patient = np.random.randint(self.X_train.shape[0])
@@ -83,13 +56,16 @@ class myEnv(gymnasium.Env):
             self.train_guesser = False
         return self.s
 
-
     def reset_mask(self):
         """ A method that resets the mask that is applied
         to the q values, so that questions that were already
         asked will not be asked again.
         """
         mask = torch.ones(self.guesser.features_size + 1)
+        #if self.patient has None in feature value mask[feature] =0
+        for i in range(self.guesser.features_size):
+            if self.X_train[self.patient, i] is None:
+                mask[i] = 0
         mask = mask.to(device=self.device)
 
         return mask
@@ -108,18 +84,29 @@ class myEnv(gymnasium.Env):
         self.reward = self.compute_reward(mode)
 
         self.time += 1
-        if self.time == self.episode_length:
+        if self.time == self.guesser.features_size:
             self.terminate_episode()
 
         return self.s, self.reward, self.done, self.guess
 
-    # Update 'done' flag when episode terminates
     def terminate_episode(self):
+
         self.done = True
 
-    def update_state(self, action, mode, mask):
-        next_state = np.array(self.state)
+    def prob_guesser(self, state):
+        guesser_input = torch.Tensor(
+            state[:self.guesser.features_size])
+        if torch.cuda.is_available():
+            guesser_input = guesser_input.cuda()
+        self.guesser.train(mode=False)
+        self.probs = self.guesser(guesser_input)
+        self.guess = torch.argmax(self.probs).item()
+        self.correct_prob = self.probs[int(self.y_train[self.patient])].item()
+        return self.correct_prob
 
+    def update_state(self, action, mode, mask):
+        prev_state = np.array(self.state)
+        next_state = np.array(self.state)
         if action < self.guesser.features_size:  # Not making a guess
             if mode == 'training':
                 next_state[action] = self.X_train[self.patient, action]
@@ -127,22 +114,19 @@ class myEnv(gymnasium.Env):
                 next_state[action] = self.X_val[self.patient, action]
             elif mode == 'test':
                 next_state[action] = self.X_test[self.patient, action]
-            next_state[action + self.guesser.features_size] += 1.
+            self.reward = (self.prob_guesser(next_state) - self.prob_guesser(prev_state))
+            # self.reward = (self.prob_guesser(next_state) - self.prob_guesser(prev_state)) * (1 / self.cost_list[action])
+            if self.reward < 0:
+                self.reward = 0
+            # self.reward = .01 * np.random.rand()
             self.guess = -1
             self.done = False
+            return next_state
 
-        else:  # Making a guess
-            guesser_input = torch.Tensor(
-                self.state[:self.guesser.features_size])
-            if torch.cuda.is_available():
-                guesser_input = guesser_input.cuda()
-            self.guesser.train(mode=False)
-            self.probs = self.guesser(guesser_input)
-            self.guess = torch.argmax(self.probs).item()
-            self.correct_prob = self.probs[self.y_train[self.patient]].item()
+        else:
+            self.reward = self.prob_guesser(prev_state)
             self.terminate_episode()
-
-        return next_state
+            return prev_state
 
     def compute_reward(self, mode):
         """ Compute the reward """
@@ -151,28 +135,42 @@ class myEnv(gymnasium.Env):
             return None
 
         if self.guess == -1:  # no guess was made
-            return .01 * np.random.rand()
-        else:
-            reward = self.correct_prob
+            return self.reward
 
         if mode == 'training':
             y_true = self.y_train[self.patient]
+            if self.train_guesser:
+                self.guesser.optimizer.zero_grad()
+                self.guesser.train(mode=True)
+                y_tensor = torch.tensor([int(y_true)])
+                y_true_tensor = F.one_hot(y_tensor, num_classes=2).squeeze()
+                self.probs = self.probs.float()
+                y_true_tensor = y_true_tensor.float()
+                self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)
+                self.guesser.loss.backward()
+                self.guesser.optimizer.step()
 
-        if self.train_guesser:
-            # y_pred=[]
-            # y = torch.Tensor(y_true).long()
-            # y_pred.append(y)
-            # labels = torch.Tensor(np.array(y_pred)).long()
-            # train guesser
-            self.guesser.optimizer.zero_grad()
-            # y = torch.Tensor(np.array(y_true))
-            # y = y.to(device=self.device)
-            self.guesser.train(mode=True)
-            y_true_tensor = torch.tensor([y_true]).float().long()
-            self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)
-            self.guesser.loss.backward()
-            self.guesser.optimizer.step()
-            # update learning rate
-            self.guesser.update_learning_rate()
+        return self.reward
 
-        return reward
+
+    # def compute_reward(self, mode):
+    #     """ Compute the reward """
+    #
+    #     if mode == 'test':
+    #         return None
+    #
+    #     if self.guess == -1:  # no guess was made
+    #         return self.reward
+    #
+    #     if mode == 'training':
+    #         y_true = self.y_train[self.patient]
+    #         if self.train_guesser:
+    #             self.guesser.optimizer.zero_grad()
+    #             self.guesser.train(mode=True)
+    #             y_true_tensor = torch.tensor([y_true], dtype=torch.float32)  # Use float for regression
+    #             self.probs = self.probs.float()
+    #             self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)
+    #             self.guesser.loss.backward()
+    #             self.guesser.optimizer.step()
+    #
+    #     return self.reward

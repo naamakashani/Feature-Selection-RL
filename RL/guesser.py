@@ -1,5 +1,7 @@
 import argparse
+import pandas as pd
 from itertools import count
+from random import random
 import numpy as np
 from fastai.data.load import DataLoader
 from matplotlib import pyplot as plt
@@ -19,19 +21,19 @@ parser.add_argument("--directory",
                     help="Directory for saved models")
 parser.add_argument("--batch_size",
                     type=int,
-                    default=64,
+                    default=256,
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=400,
+                    default=10000,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,
-                    default=64,
+                    default=32,
                     help="Hidden dimension")
 parser.add_argument("--hidden-dim2",
                     type=int,
-                    default=128,
+                    default=64,
                     help="Hidden dimension")
 parser.add_argument("--lr",
                     type=float,
@@ -41,23 +43,31 @@ parser.add_argument("--weight_decay",
                     type=float,
                     default=0.001,
                     help="l_2 weight penalty")
-parser.add_argument("--val_interval",
-                    type=int,
-                    default=60,
-                    help="Interval for calculating validation reward and saving model")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=60,
+                    default=100,
                     help="Number of validation trials without improvement")
-parser.add_argument("--episode_length",
-                    type=int,
-                    default=5,
-                    help="Episode length")
 
 FLAGS = parser.parse_args(args=[])
 
 
-def balance_class(X, y):
+def add_noise(X, noise_std=0.01):
+    """
+    Add Gaussian noise to the input features.
+
+    Parameters:
+    - X: Input features (numpy array).
+    - noise_std: Standard deviation of the Gaussian noise.
+
+    Returns:
+    - X_noisy: Input features with added noise.
+    """
+    noise = np.random.normal(loc=0, scale=noise_std, size=X.shape)
+    X_noisy = X + noise
+    return X_noisy
+
+
+def balance_class(X, y, noise_std=0.01):
     unique_classes, class_counts = np.unique(y, return_counts=True)
     minority_class = unique_classes[np.argmin(class_counts)]
     majority_class = unique_classes[np.argmax(class_counts)]
@@ -71,17 +81,71 @@ def balance_class(X, y):
     majority_count = len(majority_indices)
     count_diff = majority_count - minority_count
 
-    # Duplicate samples from the minority class to balance the dataset
+    # Add noise to the features of the minority class to balance the dataset
     if count_diff > 0:
-        # Randomly sample indices from the minority class to duplicate
-        duplicated_indices = np.random.choice(minority_indices, count_diff, replace=True)
-        # Concatenate the duplicated samples to the original arrays
-        X_balanced = np.concatenate([X, X[duplicated_indices]], axis=0)
-        y_balanced = np.concatenate([y, y[duplicated_indices]], axis=0)
+        # Randomly sample indices from the minority class to add noise
+        noisy_indices = np.random.choice(minority_indices, count_diff, replace=True)
+        # Add noise to the features of the selected samples
+        X_balanced = np.concatenate([X, add_noise(X[noisy_indices], noise_std)], axis=0)
+        y_balanced = np.concatenate([y, y[noisy_indices]], axis=0)
     else:
         X_balanced = X.copy()  # No need for balancing, as classes are already balanced
         y_balanced = y.copy()
     return X_balanced, y_balanced
+
+
+def multiply_samples_with_noise(X, Y, noise_std=0.01):
+    """
+    Multiply samples of input features with noise.
+
+    Parameters:
+    - X: Input features (numpy array).
+    - Y: Target values (numpy array).
+    - num_samples: Number of times to multiply the samples.
+    - noise_std: Standard deviation of the Gaussian noise.
+
+    Returns:
+    - X_multiplied_noisy: Multiplied input features with added noise.
+    - Y: Target values (unchanged).
+    """
+    X_multiplied_noisy = [X]
+    Y_mul = np.concatenate([Y, Y])
+
+    X_noisy = add_noise(X, noise_std)
+    X_multiplied_noisy.append(X_noisy)
+    X_multiplied_noisy = np.concatenate(X_multiplied_noisy)
+
+    return X_multiplied_noisy, Y_mul
+
+
+def augment_data(X, Y, num_augmentations=50, noise_level=0.1):
+    """
+    Augment data by duplicating and adding Gaussian noise.
+
+    Parameters:
+    X (numpy.ndarray): Original feature data.
+    Y (numpy.ndarray): Original labels.
+    num_augmentations (int): Number of times to augment each sample.
+    noise_level (float): Standard deviation of Gaussian noise to add.
+
+    Returns:
+    X_augmented (numpy.ndarray): Augmented feature data.
+    Y_augmented (numpy.ndarray): Augmented labels.
+    """
+    X_augmented = []
+    Y_augmented = []
+
+    for i in range(num_augmentations):
+        noise = np.random.normal(0, noise_level, X.shape)
+        X_noisy = X + noise
+        X_augmented.append(X_noisy)
+        Y_augmented.append(Y)
+
+    # Concatenate the original data with the augmented data
+    X_augmented = np.vstack([X] + X_augmented)
+    Y_augmented = np.hstack([Y] + Y_augmented)
+
+    return X_augmented, Y_augmented
 
 
 class Guesser(nn.Module):
@@ -94,8 +158,12 @@ class Guesser(nn.Module):
                  num_classes=2):
 
         super(Guesser, self).__init__()
-        self.X, self.y, self.question_names, self.features_size = utils.load_diabetes()
-        # self.X, self.y = balance_class(self.X, self.y)
+        self.X, self.y, self.question_names, self.features_size = utils.load_colon()
+        self.cost= utils.load_cost()
+        self.X, self.y = balance_class(self.X, self.y)
+        # self.X, self.y = augment_data(self.X, self.y, num_augmentations=50, noise_level=0.1)
+        # self.X, self.y = multiply_samples_with_noise(self.X, self.y)
+
         self.layer1 = torch.nn.Sequential(
             torch.nn.Linear(self.features_size, hidden_dim1),
             torch.nn.PReLU(),
@@ -105,8 +173,16 @@ class Guesser(nn.Module):
             torch.nn.Linear(hidden_dim1, hidden_dim2),
             torch.nn.PReLU(),
         )
-
         self.layer3 = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim2, hidden_dim2),
+            torch.nn.PReLU(),
+        )
+        self.layer4 = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim2, hidden_dim2),
+            torch.nn.PReLU(),
+        )
+
+        self.layer5 = torch.nn.Sequential(
             torch.nn.Linear(hidden_dim2, hidden_dim2),
             torch.nn.PReLU(),
         )
@@ -120,10 +196,13 @@ class Guesser(nn.Module):
         self.path_to_save = os.path.join(os.getcwd(), 'model_guesser')
 
     def forward(self, x):
+        #replace NaN with 0
+        x = torch.where(torch.isnan(x), torch.zeros_like(x), x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-
+        x = self.layer4(x)
+        x = self.layer5(x)
         logits = self.logits(x)
         if logits.dim() == 2:
             probs = F.softmax(logits, dim=1)
@@ -152,20 +231,47 @@ def mask(input: np.array) -> np.array:
     # check if images has 1 dim
     if len(input.shape) == 1:
         for i in range(input.shape[0]):
-            fraction = 1-(FLAGS.episode_length / input.shape[0])
-            # choose to mask in probability of 0.3
+            # choose a random number between 0 and 1
+            # fraction = np.random.uniform(0, 1)
+            fraction = 0.2
             if (np.random.rand() < fraction):
                 input[i] = 0
         return input
     else:
-
         for j in range(int(len(input))):
             for i in range(input[0].shape[0]):
-                fraction = 1-(FLAGS.episode_length / input[0].shape[0])
-                # choose to mask in probability of 0.3
-                if (np.random.rand() < fraction):
+                # fraction = np.random.uniform(0, 1)
+                fraction = 0.2
+                if np.random.rand() < fraction:
                     input[j][i] = 0
         return input
+
+
+
+def create_adverserial_input(inputs, labels, pretrained_model):
+    #
+
+    input = inputs.view(inputs.shape[0], -1).float()
+    input.requires_grad_(True)  # Set requires_grad for input
+    # Forward pass
+    output = pretrained_model(input)
+    labels = torch.Tensor(labels).long()
+    loss = pretrained_model.criterion(output, labels)
+
+    # Backward pass
+    loss.backward()
+    #
+    # Get the gradients
+    gradient = input.grad
+
+    # Identify the most influential features (those with the largest absolute gradients).
+    absolute_gradients = torch.abs(gradient)
+    max_gradients_indices = torch.argmax(absolute_gradients, dim=-1)
+
+    # Zero out the most influential features.
+    mask = torch.nn.functional.one_hot(max_gradients_indices, num_classes=input.shape[-1]).float()
+    zeroed_input_features = input * (1 - mask)
+    return zeroed_input_features
 
 
 def val(model, val_loader, best_val_auc=0):
@@ -175,9 +281,8 @@ def val(model, val_loader, best_val_auc=0):
     valid_loss = 0
     with torch.no_grad():
         for input, labels in val_loader:
-            input = input.view(input.shape[0], -1)
-            # call mask function on images
             input = mask(input)
+            input = input.view(input.shape[0], -1)
             input = input.float()
             output = model(input)
             _, predicted = torch.max(output.data, 1)
@@ -208,9 +313,8 @@ def test(test_loader, path_to_save):
     y_pred = []
     with torch.no_grad():
         for images, labels in test_loader:
-            images = images.view(images.shape[0], -1)
-            # call mask function on images
             images = mask(images)
+            images = images.view(images.shape[0], -1)
             images = images.float()
             output = model(images)
             _, predicted = torch.max(output.data, 1)
@@ -245,18 +349,16 @@ def train_model(model,
     val_trials_without_improvement = 0
     best_val_auc = 0
     # count total sampels in trainloaser
-    total_samples = len(train_loader.dataset)
     accuracy_list = []
     training_loss_list = []
     for i in range(1, nepochs):
         running_loss = 0
-        for images, labels in train_loader:
-            images = images.view(images.shape[0], -1)
-            images = mask(images)
-            images = images.float()
+        for input, labels in train_loader:
+            input = mask(input)
+            input = input.view(input.shape[0], -1).float()
             model.train()
             model.optimizer.zero_grad()
-            output = model(images)
+            output = model(input)
             y_pred = []
             for y in labels:
                 y = torch.Tensor(y).long()
@@ -266,9 +368,10 @@ def train_model(model,
             running_loss += loss.item()
             loss.backward()
             model.optimizer.step()
+
         training_loss_list.append(running_loss / len(train_loader))
-        print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
-        if i % 2 == 0:
+        # print(f'Epoch: {i}, training loss: {running_loss / len(train_loader):.2f}')
+        if i % 20 == 0:
             new_best_val_auc = val(model, val_loader, best_val_auc)
             accuracy_list.append(new_best_val_auc)
             if new_best_val_auc > best_val_auc:
@@ -335,13 +438,14 @@ def main():
     :return:
     '''
     model = Guesser()
+
     X_train, X_test, y_train, y_test = train_test_split(model.X,
                                                         model.y,
-                                                        test_size=0.33,
+                                                        test_size=0.2,
                                                         random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_train,
                                                       y_train,
-                                                      test_size=0.05,
+                                                      test_size=0.2,
                                                       random_state=24)
     # Convert data to PyTorch tensors
     X_tensor_train = torch.from_numpy(X_train)
